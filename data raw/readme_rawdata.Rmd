@@ -24,6 +24,8 @@ The data raw Folder includes all data as it was received from its various source
 
     -   Link: <https://psl.noaa.gov/data/gridded/data.noaa.oisst.v2.highres.html>
 
+    -   As for the large file size (2 gb) this file is not pushed to the GitHub repository.
+
 -   **NS SST Monthly.nc** was fetched from the Copernicus Marine MyOcean platform. It contains SST data of the North Sea interpolated with the NEMO model.
 
     -   Type: SST on a monthly scale
