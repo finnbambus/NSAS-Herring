@@ -1,0 +1,16 @@
+---
+title: "readme_R"
+author: "finn krauss"
+date: "2025-05-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The Folder R contains all the R code used in this project.
+
+-   **tipping_northsea_fish-main.zip** contains the R code used for the paper ["Regime shift dynamics, tipping points and the success of fisheries management" by Blöcker et al. 2023](doi.org/10.1038/s41598-022-27104-y) .
+    -   Use: It includes code used in the analysis for change points (Spawning Stock Biomass (SSB)), hysteresis and Stock Recruitment Relationship (SRR).
+    -   Link: <https://github.com/HeleneGutte/tipping_northsea_fish/tree/main>
