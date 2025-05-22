@@ -5,15 +5,21 @@ date: "2025-05-22"
 output: html_document
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+```
+
 # Load packages
 
 ```{r}
 setwd("~/R Studio/NSAS Herring/NSAS-Herring")
 
+library(dplyr)
 library(tidyverse)
 library(ncdf4)
 library(raster)
 library(ggplot2)
+library(tidyr)
 ```
 
 # Load and clean files
@@ -24,7 +30,7 @@ library(ggplot2)
 LAI_raw <- read.table("data raw/NSAS LAI.txt", sep = "", header = TRUE, strip.white = TRUE) %>%
   rename(component = Area, year = Year, LAI_unit = LAIUnit, fortnight = Fortnight, LAI_9mm = L..9) %>%  # rename columns
   mutate(year = ifelse(year >= 100, 2000 + (year - 100),1900 + year),
-         component = case_when(component == "Or/Sh" ~ "Shetland/Orkney", 
+         component = case_when(component == "Or/Sh" ~ "Shetland_Orkney", 
                                component == "CNS" ~ "Banks",
                                component == "SNS" ~ "Downs", TRUE ~ component),
          component = as.factor(component),
@@ -34,7 +40,7 @@ LAI_raw <- read.table("data raw/NSAS LAI.txt", sep = "", header = TRUE, strip.wh
 LAI_component_raw <- read_csv("data raw/NSAS LAI Components 2025.csv") %>%
   pivot_longer(cols = -c(1), names_to = "year", values_to = "LAI_perc.") %>%  # convert data into long format
   rename(component = ...1) %>%  # rename first column after pivot transform
-  mutate(component = case_when(component == "LAI-ORSH" ~ "Shetland/Orkney",
+  mutate(component = case_when(component == "LAI-ORSH" ~ "Shetland_Orkney",
                                component == "LAI-BUN" ~ "Buchan",
                                component == "LAI-CNS" ~ "Banks",
                                component == "LAI-SNS" ~ "Downs"),
@@ -93,7 +99,17 @@ combined_env_data <- list(
   years = years,
   months = months,
   dates = dates)
+```
 
+### Splitting environmental data by components
+
+```{r}
+### Set component boundaries
+stock_areas <- list(
+  Shetland_Orkneys = list(lon_min = 0, lon_max = 5.0, lat_min = 51.5, lat_max = 55.0),
+  Buchan = list(lon_min = -2.5, lon_max = 2.5, lat_min = 55.0, lat_max = 60.0),
+  Banks = list(lon_min = 2.5, lon_max = 7.5, lat_min = 57.5, lat_max = 62.5),
+  Downs = list(lon_min =, lon_max =, lat_min =, lar_max =))
 ```
 
 # First visual investigation
@@ -156,4 +172,51 @@ ggplot(SSB_split_raw, aes(x = year, y = (SSB_by_component / 1000000))) +
   theme(plot.title = element_text(hjust = 0.5),
         axis.title.x = element_text(margin = margin(t = 10)),
         axis.title.y = element_text(margin = margin(r = 10)))
+```
+
+## Environmental data
+
+```{r}
+# Calculate overall (North Sea wide) monthly and yearly averages for time series plots
+overall_sst_ts <- apply(sst_data_raw, 3, mean, na.rm = TRUE) # Mean across lon, lat for each time step
+overall_sbt_ts <- apply(sbt_data_raw, 3, mean, na.rm = TRUE)
+overall_sss_ts <- apply(sss_data_raw, 3, mean, na.rm = TRUE)
+
+# Create a data frame for monthly time series plotting
+overall_ts_df <- data.frame(
+  Date = dates,
+  Year = years,
+  Month = months,
+  SST = overall_sst_ts,
+  SBT = overall_sbt_ts,
+  SSS = overall_sss_ts)
+
+# Calculate yearly averages from the monthly data
+yearly_avg_df <- overall_ts_df %>%
+  group_by(Year) %>%
+  summarise(
+    SST = mean(SST, na.rm = TRUE),
+    SBT = mean(SBT, na.rm = TRUE),
+    SSS = mean(SSS, na.rm = TRUE),
+    .groups = 'drop') %>% # Create a Date for the yearly average to align with monthly plot
+  mutate(Date = as.Date(paste0(Year, "-06-06")))
+
+# Melt the data frames for easier plotting with ggplot2 (one 'value' column)
+overall_ts_melted <- melt(overall_ts_df, id.vars = c("Date", "Year", "Month"),
+                          variable.name = "Variable", value.name = "Value_Monthly")
+
+yearly_avg_melted <- melt(yearly_avg_df, id.vars = c("Date", "Year"),
+                          variable.name = "Variable", value.name = "Value_Yearly")
+
+# Plot overall time series with yearly averages overlayed
+ggplot(overall_ts_melted, aes(x = Date, y = Value_Monthly, color = Variable)) +
+  geom_line(alpha = 0.8) + # Monthly averages
+  geom_smooth(data = yearly_avg_melted, aes(x = Date, y = Value_Yearly, color = Variable), size = 1.2) + # Yearly averages
+  labs(title = "Overall North Sea Environmental Conditions (Monthly & Yearly Averages)",
+       y = "Value",
+       x = "Date") +
+  theme_minimal() +
+  scale_color_manual(values = c("SST" = "red", "SBT" = "blue", "SSS" = "darkgreen")) +
+  facet_wrap(~ Variable, scales = "free_y", ncol = 1) # Separate plots for each variable with own y-axis
+
 ```
