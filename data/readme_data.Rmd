@@ -1,0 +1,26 @@
+---
+title: "readme_data"
+author: "finn krauss"
+date: "2025-05-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The "data" folder contains the .Rdata files used for analysis. The files are processed data from the "data raw" folder by the code in the "data_cleanup.Rmd" file of the "R" folder.
+
+-   **env_data\_** contains environmental (Sea-Surface-Temperature, Sea-Bottom-Temperature & Sea-Surface-Salinity) data including the dimensions longitude, latitude, years, months & dates.
+    -   Variations: full (data for the entire North Sea), subset (data subset and limited into spawning components (Shetland / Orkneys, Buchan, Banks & Downs))
+    -   Type: List
+    -   Variables: SST [°C], SBT [°C], SSS [PSU], lon [° long], lat [° lat], years, months & dates
+-   **LAI_full** contains the LAI data for each component and fortnight
+    -   Type: Data frame
+    -   Variables: year, LAI_unit, component, fortnight, LAI_9mm
+-   **LAI_aggregated** contains the LAI data summed per year per component.
+    -   Type: Data frame
+    -   Variables: year, component, LAI_9mm
+-   **SSB_LAI** contains the Spawning-Stock-Biomass (SSB) for the entire stock over time, as well as the percent each component contributed to the LAI for each year and the calculated SSB for each component for each year.
+    -   Type: tibble
+    -   Variables: year, SSB, cv (coefficient variation), l_bnd (lower bound), u_bnd (upper bound), component, LAI_perc. [%] & SSB_by_component

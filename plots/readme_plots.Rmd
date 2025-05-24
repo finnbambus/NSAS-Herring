@@ -1,0 +1,22 @@
+---
+title: "readme_plots"
+author: "finn krauss"
+date: "2025-05-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The Folder "plots" contains plots generated inside the R code of this project.
+
+-   **env\_...** show time-series of the environmental data (Sea-Surface-Temperature, Sea-Bottom-Temperature & Sea-Surface-Salinity) of the individual spawning components. They contain monthly values, as well as a yearly average.
+
+-   **LAI_by_year** shows the time-series of the Larvae-Abundance-Index (LAI) for each spawning component.
+
+-   **LAI_percent** shows the percentage of the total LAI each component contributes over time.
+
+-   **SSB** shows the Spawning-Stock-Biomass (SSB), including the 95% confidence interval, over time.
+
+-   **SSB_component** subsets the SSB into the components using the LAI percent values.

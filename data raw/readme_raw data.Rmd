@@ -1,0 +1,93 @@
+---
+title: "README"
+output: html_document
+date: "2025-05-20"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The data raw Folder includes all data as it was received from its various sources. The data was received in May / June 2025.
+
+### Environmental Data
+
+-   **Global SST Monthly Mean.nc** was fetched from the NOAA Physical Sciences Laboratory. It contains SST data interpolated with the Optimal Interpolation (OI) model.
+
+    -   Type: Sea Surface Temperature (SST), daily data condensed to monthly average
+
+    -   Coverage: Global
+
+    -   Time Range: 09.1981 to 05.2025
+
+    -   Resolution: 0.25° x 0.25°
+
+    -   Link: <https://psl.noaa.gov/data/gridded/data.noaa.oisst.v2.highres.html>
+
+    -   As for the large file size (2 gb) this file is not pushed to the GitHub repository.
+
+-   **NS SST Monthly.nc** was fetched from the Copernicus Marine MyOcean platform. It contains SST data of the North Sea interpolated with the NEMO model.
+
+    -   Type: SST on a monthly scale
+
+    -   Coverage: North Sea
+
+    -   Time Range 01.1993 to 01.2024
+
+    -   Resolution: 0.111° x 0.067°
+
+    -   Link: <https://data.marine.copernicus.eu/viewer/expert?view=dataset&dataset=NWSHELF_MULTIYEAR_PHY_004_009>
+
+-   **NS SBT Monthly.nc** was fetched from the Copernicus Marine MyOcean platform. It contains SBT data of the North Sea interpolated with the NEMO model.
+
+    -   Type: Sea Bottom Temperature (SBT) on a monthly scale
+
+    -   Coverage: North Sea
+
+    -   Time Range 01.1993 to 01.2024
+
+    -   Resolution: 0.111° x 0.067°
+
+    -   Link: <https://data.marine.copernicus.eu/viewer/expert?view=dataset&dataset=NWSHELF_MULTIYEAR_PHY_004_009>
+
+-   **NS SSS Monthly.nc** was fetched from the Copernicus Marine MyOcean platform. It contains SSS data of the North Sea interpolated with the NEMO model.
+
+    -   Type: Sea Surface Salinity (SSS) on a monthly scale
+
+    -   Coverage: North Sea
+
+    -   Time Range 01.1993 to 01.2024
+
+    -   Resolution: 0.111° x 0.067°
+
+    -   Link: <https://data.marine.copernicus.eu/viewer/expert?view=dataset&dataset=NWSHELF_MULTIYEAR_PHY_004_009>
+
+-   **NSAS LAI.txt** contains Larva Abundance Index data for the North Sea Herring (*Clupea Harengus*). It was received from Niels T. Hintzen of the Pelagic Freezer Trawler Association (PFA). Data is originally provided by the ICES HAWG.
+
+    -   Type: LAI data for the North Sea herring, sepereated by fortnight and spawning component.
+
+    -   Time Range: 1972 to 2024
+
+    -   DOI: <https://doi.org/10.1093/icesjms/fsab078>, <https://doi.org/10.17895/ices.pub.25305532.v8>
+
+-   **NSAS LAI Components.csv** contains component specific LAI data for the North Sea Herring. It was received from Niels T. Hintzen of the Pelagic Freezer Trawler Association (PFA). Data is originally provided by the ICES HAWG.
+
+    -   Type: LAI percentage of the individual stocks for each year.
+
+    -   Time Range: 1972 to 2024
+
+    -   DOI: <https://doi.org/10.1093/icesjms/fsab078>, <https://doi.org/10.17895/ices.pub.25305532.v8>
+
+-   **NSAS SSB 2025.csv** contains Spawning Stock Biomass data for the North Sea Herring. It was received from Niels T. Hintzen of the Pelagic Freezer Trawler Association (PFA). Data is originally provided by the ICES HAWG.
+
+    -   Type: Yearly SSB data including coefficient variation as well as upper and lower bound for each year.
+
+    -   Time Range: 1947 to 2025
+
+    -   DOI: <https://doi.org/10.1093/icesjms/fsab078>, <https://doi.org/10.17895/ices.pub.25305532.v8>
+
+-   **coords\_ component.csv** contains geographical data for each component. The data was estimated from the maps provided in "Mind the gaps: a state-space model for analysing the dynamics of North Sea herring spawning components" Payne, 2010 and others.
+
+    -   Type: Geographical data for the spawning components of the NSAS herring.
+
+    -   DOI: <https://doi.org/10.1093/icesjms/fsq036>

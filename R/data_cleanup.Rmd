@@ -28,7 +28,7 @@ library(reshape2)
 
 ```{r}
 ## Read LAI .txt data, rename its columns & convert from century break to full year
-LAI_raw <- read.table("data raw/NSAS LAI.txt", header = TRUE, strip.white = TRUE) %>%
+LAI_full <- read.table("data raw/NSAS LAI.txt", header = TRUE, strip.white = TRUE) %>%
   rename(component = Area, 
          year = Year, 
          LAI_unit = LAIUnit, 
@@ -44,7 +44,7 @@ LAI_raw <- read.table("data raw/NSAS LAI.txt", header = TRUE, strip.white = TRUE
          fortnight = as.factor(fortnight))
 
 ## Read LAI_components .csv, convert it into longformat & rename columns for continuity
-LAI_component_raw <- read_csv("data raw/NSAS LAI Components 2025.csv") %>%
+LAI_component <- read_csv("data raw/NSAS LAI Components 2025.csv") %>%
   pivot_longer(cols = -c(1), names_to = "year", values_to = "LAI_perc.") %>%
   rename(component = ...1) %>%
   mutate(component = case_when(component == "LAI-ORSH" ~ "Shetland_Orkney",
@@ -56,15 +56,15 @@ LAI_component_raw <- read_csv("data raw/NSAS LAI Components 2025.csv") %>%
          LAI_perc. = LAI_perc. * 100)
 
 ## Read SSB_2025 .csv & and rename columns for continuity
-SSB_raw <- read_csv("data raw/NSAS SSB 2025.csv") %>%
+SSB_full <- read_csv("data raw/NSAS SSB 2025.csv") %>%
   dplyr::select(-1) %>%
   rename(SSB = value, cv = CV, l_bnd = lbnd, u_bnd = ubnd)  
 
   ### *(SSB = SSB in Tonnes, cv = coefficient of variation, l_bnd = lower limit of 95% CI & u_bnd = upper limit of 95% CI)
 
-## Split SSB Data by components & 95% bounds by component percentage
-SSB_subset_raw <- SSB_raw %>%
-  left_join(LAI_component_raw, by = "year") %>%
+## Split SSB Data by components & 95% bounds by component percentage and attach it and LAI percent data to SSB
+SSB_LAI <- SSB_full %>%
+  left_join(LAI_component, by = "year") %>%
   mutate(SSB_by_component = SSB * (LAI_perc. / 100),
          l_bnd = l_bnd * (LAI_perc. / 100),
          u_bnd = u_bnd * (LAI_perc. / 100)) %>%
@@ -117,7 +117,7 @@ load_environmental_data <- function(sst_file, sbt_file, sss_file) {
   months <- as.numeric(format(dates, "%m"))
 
   ### Combine into a single structure
-  combined_env_data <- list(
+  env_data_full <- list(
     SST = sst_data_raw,
     SBT = sbt_data_raw,
     SSS = sss_data_raw,
@@ -127,10 +127,10 @@ load_environmental_data <- function(sst_file, sbt_file, sss_file) {
     months = months,
     dates = dates)
 
-  return(combined_env_data)}
+  return(env_data_full)}
 
 ## Call function and store in environment
-combined_env_data <- load_environmental_data("data raw/NS SSt Monthly.nc", "data raw/NS SBT Monthly.nc", "data raw/NS SSS Monthly.nc")
+env_data_full <- load_environmental_data("data raw/NS SSt Monthly.nc", "data raw/NS SBT Monthly.nc", "data raw/NS SSS Monthly.nc")
 ```
 
 ### Splitting environmental & SSB data by components
@@ -177,7 +177,7 @@ subset_environmental_data <- function(combined_data) {
   return(environmental_subsets_by_area)}
 
 ## Call the function and store result in environment
-subset_env_data <- subset_environmental_data(combined_env_data)
+env_data_subset <- subset_environmental_data(env_data_full)
 ```
 
 # First visual investigation
@@ -185,19 +185,29 @@ subset_env_data <- subset_environmental_data(combined_env_data)
 ## LAI data visualization
 
 ```{r}
-## Plot imeseries of LAI by component
-ggplot(LAI_raw, aes(x = year, 
-                    y = LAI_9mm, 
+## Plot timeseries of LAI by component
+
+### Add LAI by year
+LAI_aggregated <- LAI_full %>%
+  group_by(year, component) %>%
+  summarise(LAI_9mm_sum = sum(LAI_9mm),
+    .groups = 'drop')
+  
+### Plot aggregated LAI
+plot_LAI_byyear <- ggplot(LAI_aggregated, aes(x = year, 
+                    y = LAI_9mm_sum, 
                     group = component)) +
-  geom_line(color = "navyblue") +
+  geom_line(color = "navyblue", linewidth = 0.8) +
+  geom_smooth(color = "steelblue", linewidth = 0.8) +
   facet_wrap(~ component, ncol = 2, scales = "free_y") +
-  labs(title = "Larvae Abundance Index (LAI) by Unit Area over Years", 
+  labs(title = "Agregated Larvae Abundance Index (LAI) by Unit Area over Years", 
        x = "Year", 
        y = "LAI (Larvae Abundance Index) >= 9mm") +
   theme_minimal()
+print(plot_LAI_byyear)
 
 ## Plot stacked bar chart for components percentage of LAI
-ggplot(LAI_component_raw, aes(x = as.factor(year), 
+plot_LAI_percent <- ggplot(LAI_component, aes(x = as.factor(year), 
                               y = LAI_perc., fill = component)) +
   geom_bar(stat = "identity", position = "stack") + # Create stacked bars
   labs(title = "Percentage of Larvae Abundance Index (LAI) by Component and Year",
@@ -210,9 +220,10 @@ ggplot(LAI_component_raw, aes(x = as.factor(year),
         axis.title.x = element_text(margin = margin(t = 10)),
         axis.title.y = element_text(margin = margin(r = 10))) +
   scale_fill_viridis_d()
+print(plot_LAI_percent)
 
 ## Plot timeseries of SSB including confindence bounds
-ggplot(SSB_raw, aes(x = year)) +
+plot_SSB_full <- ggplot(SSB_full, aes(x = year)) +
   geom_ribbon(aes(ymin = (l_bnd / 1000000), 
                   ymax = (u_bnd / 1000000)), fill = "skyblue", alpha = 0.5) +
   geom_line(aes(y = (SSB / 1000000)), color = "navyblue", linewidth = 1) +
@@ -223,9 +234,10 @@ ggplot(SSB_raw, aes(x = year)) +
   theme(plot.title = element_text(hjust = 0.5),
         axis.title.x = element_text(margin = margin(t = 10)),
         axis.title.y = element_text(margin = margin(r = 10)))
+print(plot_SSB_full)
 
 ## Visualise subset SSB data by component
-ggplot(SSB_subset_raw, aes(x = year, 
+plot_SSB_component <- ggplot(SSB_LAI, aes(x = year, 
                            y = (SSB_by_component / 1000000))) +
   geom_ribbon(aes(ymin = (l_bnd / 1000000), ymax = (u_bnd / 1000000)), fill = "skyblue", alpha = 0.5) +
   geom_line(color = "navyblue", linewidth = 0.8) +
@@ -237,6 +249,7 @@ ggplot(SSB_subset_raw, aes(x = year,
   theme(plot.title = element_text(hjust = 0.5),
         axis.title.x = element_text(margin = margin(t = 10)),
         axis.title.y = element_text(margin = margin(r = 10)))
+print(plot_SSB_component)
 ```
 
 ## Environmental data visualization
@@ -244,7 +257,7 @@ ggplot(SSB_subset_raw, aes(x = year,
 ```{r}
 
 ## Build function to plot environmental data
-plot_environmental_ts <- function(data_list) {
+plot_environmental_ts <- function(data_list, plot_area_title) {
   
   ### Extract variables from the input list
   sst_data_raw <- data_list$SST
@@ -291,18 +304,113 @@ plot_environmental_ts <- function(data_list) {
     geom_smooth(data = yearly_avg_melted, aes(x = Date, 
                                               y = Value_Yearly, 
                                               color = Variable), size = 1.2) +
-    labs(title = "Overall North Sea Environmental Conditions (Monthly & Yearly Averages)",
+    labs(title = paste(plot_area_title, " Environmental Conditions (Monthly & Yearly Averages)"),
          y = "Value",
          x = "Date") +
     theme_minimal() +
     scale_color_manual(values = c("SST" = "red", "SBT" = "blue", "SSS" = "darkgreen")) +
-    facet_wrap(~ Variable, scales = "free_y", ncol = 1)
+    facet_wrap(~ Variable, scales = "free_y", ncol = 1) +
+    theme(legend.position = "none")
   
   return(p)}
 
 ## Call function and plot combined data
-plot_environmental_ts(combined_env_data)
+plot_env_data_full <- plot_environmental_ts(env_data_full, "Overall North Sea")
+print(plot_env_data_full)
 
-## build function for seperated data (nur der titel muss jetzt varibel sein)
+## Plot subset data into a grid
+plot_env_data_Shetland_Orkneys <- plot_environmental_ts(env_data_subset$Shetland_Orkney, "Shetland / Orkney")
+plot_env_data_Buchan <- plot_environmental_ts(env_data_subset$Buchan, "Buchan")
+plot_env_data_Banks <- plot_environmental_ts(env_data_subset$Banks, "Banks")
+plot_env_data_Downs <- plot_environmental_ts(env_data_subset$Downs, "Downs")
 
+print(plot_env_data_Shetland_Orkneys)
+print(plot_env_data_Buchan)
+print(plot_env_data_Banks)
+print(plot_env_data_Downs)
+```
+
+# Save data and plots
+
+## Save rdata
+
+```{r}
+### LAI data
+save(LAI_full, file = file.path("data/", "LAI_full.Rdata"))
+save(LAI_aggregated, file = file.path("data/", "LAI_aggregated.Rdata"))
+save(SSB_LAI, file = file.path("data/", "SSB_LAI.Rdata"))
+
+
+# Environmental data
+save(env_data_full, file = file.path("data/", "env_data_full.Rdata"))
+save(env_data_subset, file = file.path("data/", "env_data_subset.Rdata"))
+```
+
+## Save plots
+
+```{r}
+### LAI plots
+ggsave(filename = file.path("plots/", "LAI_by_year.png"),
+       plot = plot_LAI_byyear,
+       bg = "white",
+       width = 15,
+       height = 10,
+       dpi = 300)
+
+ggsave(filename = file.path("plots/", "LAI_percent.png"),
+       plot = plot_LAI_percent,
+       bg = "white",
+       width = 15,
+       height = 10,
+       dpi = 300)
+
+ggsave(filename = file.path("plots/", "SSB_component.png"),
+       plot = plot_SSB_component,
+       bg = "white",
+       width = 15,
+       height = 10,
+       dpi = 300)
+
+ggsave(filename = file.path("plots/", "SSB.png"),
+       plot = plot_SSB_full,
+       bg = "white",
+       width = 15,
+       height = 10,
+       dpi = 300)
+
+### Env. plots
+ggsave(filename = file.path("plots/", "env_NS.png"),
+       plot = plot_env_data_full,
+       bg = "white",
+       width = 10,
+       height = 10,
+       dpi = 300)
+
+ggsave(filename = file.path("plots/", "env_Banks.png"),
+       plot = plot_env_data_Banks,
+       bg = "white",
+       width = 10,
+       height = 10,
+       dpi = 300)
+
+ggsave(filename = file.path("plots/", "env_Buchan.png"),
+       plot = plot_env_data_Buchan,
+       bg = "white",
+       width = 10,
+       height = 10,
+       dpi = 300)
+
+ggsave(filename = file.path("plots/", "env_Downs.png"),
+       plot = plot_env_data_Downs,
+       bg = "white",
+       width = 10,
+       height = 10,
+       dpi = 300)
+
+ggsave(filename = file.path("plots/", "env_Shetland_Orkneys.png"),
+       plot = plot_env_data_Shetland_Orkneys,
+       bg = "white",
+       width = 10,
+       height = 10,
+       dpi = 300)
 ```
