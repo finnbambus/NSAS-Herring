@@ -65,118 +65,27 @@ SSB_full <- read_csv("data raw/NSAS SSB 2025.csv") %>%
 ## Split SSB Data by components & 95% bounds by component percentage and attach it and LAI percent data to SSB
 SSB_LAI <- SSB_full %>%
   left_join(LAI_component, by = "year") %>%
-  mutate(SSB_by_component = SSB * (LAI_perc. / 100),
-         l_bnd = l_bnd * (LAI_perc. / 100),
-         u_bnd = u_bnd * (LAI_perc. / 100)) %>%
+  mutate(SSB_component = SSB * (LAI_perc. / 100),
+         l_bnd_component = l_bnd * (LAI_perc. / 100),
+         u_bnd_component = u_bnd * (LAI_perc. / 100)) %>%
+  dplyr::select(year, component, LAI_perc., SSB_component, l_bnd_component, u_bnd_component) %>%
   drop_na()
 ```
 
 ## Environmental .nc data import
 
 ```{r}
-## Build function for importing and combining .nc files
-load_environmental_data <- function(sst_file, sbt_file, sss_file) {
-  ### Load SST data
-  nc_sst <- nc_open(sst_file)
-  sst_data_raw <- ncvar_get(nc_sst, "thetao")
-  lon <- ncvar_get(nc_sst, "longitude")
-  lat <- ncvar_get(nc_sst, "latitude")
-  time_raw <- ncvar_get(nc_sst, "time")
-  nc_close(nc_sst)
-
-  ### Load SBT data
-  nc_sbt <- nc_open(sbt_file)
-  sbt_data_raw <- ncvar_get(nc_sbt, "bottomT")
-  nc_close(nc_sbt)
-
-  ### Load SSS data
-  nc_sss <- nc_open(sss_file)
-  sss_data_raw <- ncvar_get(nc_sss, "so")
-  nc_close(nc_sss)
-
-  ### Handle NAs
-  sst_data_raw[is.nan(sst_data_raw)] <- NA
-  sst_data_raw[sst_data_raw == -32768] <- NA
-
-  sbt_data_raw[is.nan(sbt_data_raw)] <- NA
-  sbt_data_raw[sbt_data_raw == -32768] <- NA
-
-  sss_data_raw[is.nan(sss_data_raw)] <- NA
-  sss_data_raw[sss_data_raw == -32768] <- NA
-
-  ### Handle time
-  ### Re-open nc_sst to get time attributes, or ensure it's passed/stored if needed
-  temp_nc_sst <- nc_open("data raw/NS SST Monthly.nc")
-  time_units <- ncatt_get(temp_nc_sst, "time", "units")$value
-  nc_close(temp_nc_sst)
-
-  time_origin <- sub("seconds since ", "", time_units)
-
-  dates <- as.Date(time_raw / (24 * 60 * 60), origin = time_origin)
-  years <- as.numeric(format(dates, "%Y"))
-  months <- as.numeric(format(dates, "%m"))
-
-  ### Combine into a single structure
-  env_data_full <- list(
-    SST = sst_data_raw,
-    SBT = sbt_data_raw,
-    SSS = sss_data_raw,
-    lon = lon,
-    lat = lat,
-    years = years,
-    months = months,
-    dates = dates)
-
-  return(env_data_full)}
+## Load function from "functions.R"
+source("R/functions.R")
 
 ## Call function and store in environment
 env_data_full <- load_environmental_data("data raw/NS SSt Monthly.nc", "data raw/NS SBT Monthly.nc", "data raw/NS SSS Monthly.nc")
 ```
 
-### Splitting environmental & SSB data by components
+### Splitting environmental data by components
 
 ```{r}
-
-## Build Function to subset environmental data by components
-subset_environmental_data <- function(combined_data) {
-
-  ### Load coords_components
-  coords_components <- read_csv("data raw/coords_components.csv")
-
-  ### Initialise list
-  environmental_subsets_by_area <- list()
-
-  ### Loop through each area defined in coords_components
-  for (i in 1:nrow(coords_components)) {
-    area_name <- coords_components$component[i]
-    lon_min <- coords_components$lon_min[i]
-    lon_max <- coords_components$lon_max[i]
-    lat_min <- coords_components$lat_min[i]
-    lat_max <- coords_components$lat_max[i]
-
-    ### Find the indices of long & lat that fall within the areas bounds
-    ### Use 'combined_data$' to access elements of the passed list
-    lon_indices <- which(combined_data$lon >= lon_min & combined_data$lon <= lon_max)
-    lat_indices <- which(combined_data$lat >= lat_min & combined_data$lat <= lat_max)
-
-    ### Subset the 3D environmental arrays using the identified indices
-    ### Use 'combined_data$' to access elements of the passed list
-    subset_env_list <- list(
-      SST = combined_data$SST[lon_indices, lat_indices, ],
-      SBT = combined_data$SBT[lon_indices, lat_indices, ],
-      SSS = combined_data$SSS[lon_indices, lat_indices, ],
-      lon = combined_data$lon[lon_indices],
-      lat = combined_data$lat[lat_indices],
-      years = combined_data$years,
-      months = combined_data$months,
-      dates = combined_data$dates)
-
-    ### Store data in the 'environmental_subsets_by_area' list
-    environmental_subsets_by_area[[area_name]] <- subset_env_list}
-
-  return(environmental_subsets_by_area)}
-
-## Call the function and store result in environment
+## Call the function and store result in environment (function in "functions.R")
 env_data_subset <- subset_environmental_data(env_data_full)
 ```
 
@@ -186,7 +95,6 @@ env_data_subset <- subset_environmental_data(env_data_full)
 
 ```{r}
 ## Plot timeseries of LAI by component
-
 ### Add LAI by year
 LAI_aggregated <- LAI_full %>%
   group_by(year, component) %>%
@@ -237,9 +145,8 @@ plot_SSB_full <- ggplot(SSB_full, aes(x = year)) +
 print(plot_SSB_full)
 
 ## Visualise subset SSB data by component
-plot_SSB_component <- ggplot(SSB_LAI, aes(x = year, 
-                           y = (SSB_by_component / 1000000))) +
-  geom_ribbon(aes(ymin = (l_bnd / 1000000), ymax = (u_bnd / 1000000)), fill = "skyblue", alpha = 0.5) +
+plot_SSB_component <- ggplot(SSB_LAI, aes(x = year, y = (SSB_component / 1000000))) +
+  geom_ribbon(aes(ymin = (l_bnd_component / 1000000), ymax = (u_bnd_component / 1000000)), fill = "skyblue", alpha = 0.5) +
   geom_line(color = "navyblue", linewidth = 0.8) +
   facet_wrap(~ component, ncol = 2, scales = "fixed") +
   labs(title = "SSB with 95% Confidence Bounds by Component over Years",
@@ -250,71 +157,25 @@ plot_SSB_component <- ggplot(SSB_LAI, aes(x = year,
         axis.title.x = element_text(margin = margin(t = 10)),
         axis.title.y = element_text(margin = margin(r = 10)))
 print(plot_SSB_component)
+
+plot_SSB_component_b <- ggplot(SSB_LAI, aes(x = year, y = SSB_component / 1e6, color = component, fill = component)) +
+  geom_ribbon(aes(ymin = l_bnd_component / 1e6,
+                  ymax = u_bnd_component / 1e6), alpha = 0.3, color = NA) +
+  geom_line(linewidth = 0.8) +
+  labs(title = "SSB with 95% Confidence Bounds by Component over Years",
+       x = "Year",
+       y = "SSB in million tonnes") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.title.x = element_text(margin = margin(t = 10)),
+        axis.title.y = element_text(margin = margin(r = 10)))
+plot_SSB_component_b
 ```
 
 ## Environmental data visualization
 
 ```{r}
-
-## Build function to plot environmental data
-plot_environmental_ts <- function(data_list, plot_area_title) {
-  
-  ### Extract variables from the input list
-  sst_data_raw <- data_list$SST
-  sbt_data_raw <- data_list$SBT
-  sss_data_raw <- data_list$SSS
-  dates <- data_list$dates
-  years <- data_list$years
-  months <- data_list$months
-  
-  ### Calculate overall time series by averaging across the third dimension
-  overall_sst_ts <- apply(sst_data_raw, 3, mean, na.rm = TRUE)
-  overall_sbt_ts <- apply(sbt_data_raw, 3, mean, na.rm = TRUE)
-  overall_sss_ts <- apply(sss_data_raw, 3, mean, na.rm = TRUE)
-
-  ### Create a data frame for monthly time series plotting
-  overall_ts_df <- data.frame(
-    Date = dates,
-    Year = years,
-    Month = months,
-    SST = overall_sst_ts,
-    SBT = overall_sbt_ts,
-    SSS = overall_sss_ts)
-
-  ### Calculate yearly averages from the monthly data
-  yearly_avg_df <- overall_ts_df %>%
-    group_by(Year) %>%
-    summarise(
-      SST = mean(SST, na.rm = TRUE),
-      SBT = mean(SBT, na.rm = TRUE),
-      SSS = mean(SSS, na.rm = TRUE),
-      .groups = 'drop') %>%
-    mutate(Date = as.Date(paste0(Year, "-06-06")))
-
-  ### Melt the data frames for easier plotting with ggplot2 (one 'value' column)
-  overall_ts_melted <- melt(overall_ts_df, id.vars = c("Date", "Year", "Month"),
-                            variable.name = "Variable", value.name = "Value_Monthly")
-
-  yearly_avg_melted <- melt(yearly_avg_df, id.vars = c("Date", "Year"),
-                            variable.name = "Variable", value.name = "Value_Yearly")
-
-  ### Plot overall time series with yearly averages overlayed
-  p <- ggplot(overall_ts_melted, aes(x = Date, y = Value_Monthly, color = Variable)) +
-    geom_line(alpha = 0.8) +
-    geom_smooth(data = yearly_avg_melted, aes(x = Date, 
-                                              y = Value_Yearly, 
-                                              color = Variable), size = 1.2) +
-    labs(title = paste(plot_area_title, " Environmental Conditions (Monthly & Yearly Averages)"),
-         y = "Value",
-         x = "Date") +
-    theme_minimal() +
-    scale_color_manual(values = c("SST" = "red", "SBT" = "blue", "SSS" = "darkgreen")) +
-    facet_wrap(~ Variable, scales = "free_y", ncol = 1) +
-    theme(legend.position = "none")
-  
-  return(p)}
-
-## Call function and plot combined data
+## Call function and plot combined data (function in "functions.R")
 plot_env_data_full <- plot_environmental_ts(env_data_full, "Overall North Sea")
 print(plot_env_data_full)
 
@@ -338,6 +199,7 @@ print(plot_env_data_Downs)
 ### LAI data
 save(LAI_full, file = file.path("data/", "LAI_full.Rdata"))
 save(LAI_aggregated, file = file.path("data/", "LAI_aggregated.Rdata"))
+save(SSB_full, file = file.path("data/", "SSB_full.Rdata"))
 save(SSB_LAI, file = file.path("data/", "SSB_LAI.Rdata"))
 
 
@@ -366,6 +228,13 @@ ggsave(filename = file.path("plots/", "LAI_percent.png"),
 
 ggsave(filename = file.path("plots/", "SSB_component.png"),
        plot = plot_SSB_component,
+       bg = "white",
+       width = 15,
+       height = 10,
+       dpi = 300)
+
+ggsave(filename = file.path("plots/", "SSB_component_b.png"),
+       plot = plot_SSB_component_b,
        bg = "white",
        width = 15,
        height = 10,
@@ -413,4 +282,38 @@ ggsave(filename = file.path("plots/", "env_Shetland_Orkneys.png"),
        width = 10,
        height = 10,
        dpi = 300)
+```
+
+
+
+
+
+
+
+
+
+```{r}
+SSB_full_renamed <- SSB_full %>%
+  rename(
+    SSB_component = SSB,
+    l_bnd_component = l_bnd,
+    u_bnd_component = u_bnd
+  ) %>%
+  mutate(component = "Full Stock")
+
+SSB_combined <- bind_rows(SSB_LAI, SSB_full_renamed)
+
+plot_SSB_combined <- ggplot(SSB_combined, aes(x = year, y = SSB_component / 1e6, color = component, fill = component)) +
+  geom_ribbon(aes(ymin = l_bnd_component / 1e6,
+                  ymax = u_bnd_component / 1e6), alpha = 0.3, color = NA) +
+  geom_line(linewidth = 0.9) +
+  labs(title = "SSB with 95% Confidence Bounds (Components + Full Stock)",
+       x = "Year",
+       y = "SSB in million tonnes") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.title.x = element_text(margin = margin(t = 10)),
+        axis.title.y = element_text(margin = margin(r = 10)))
+
+plot_SSB_combined
 ```

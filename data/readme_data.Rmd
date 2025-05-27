@@ -21,6 +21,9 @@ The "data" folder contains the .Rdata files used for analysis. The files are pro
 -   **LAI_aggregated** contains the LAI data summed per year per component.
     -   Type: Data frame
     -   Variables: year, component, LAI_9mm
--   **SSB_LAI** contains the Spawning-Stock-Biomass (SSB) for the entire stock over time, as well as the percent each component contributed to the LAI for each year and the calculated SSB for each component for each year.
+-   **SSB_LAI** contains the Spawning-Stock-Biomass (SSB) for each component over time, as well as the percent each component contributed to the LAI for each year.
     -   Type: tibble
-    -   Variables: year, SSB, cv (coefficient variation), l_bnd (lower bound), u_bnd (upper bound), component, LAI_perc. [%] & SSB_by_component
+    -   Variables: year, component, LAI_perc. [%], SSB_component [t], l_bnd (lower bound) [t], u_bnd (upper bound) [t]
+-   **SSB_full** contains the SSB time-series for the full stock as well as a coefficient variance and lower and upper bounds.
+    -   Type: tibble
+    -   Variales: year, SSB [t], cv, l_bnd [t], u_bnd [t]

@@ -15,6 +15,14 @@ The folder R contains all the R code used in this project.
 
     -   Use: Import raw data, save clean data & generate first plots.
 
+-   **data_analysis** contains the R code to analyse the data for regimes shifts, it imports its data from "data" and uses functions of the "functions" file.
+
+    -   Use: Import and analyse data for regmie-shifts
+
+-   **functions** contains the definition of various functions to cluttered the main code files.
+
+    -   use: defines functions used in "data_cleanup" & "data_analysis"
+
 -   **tipping_northsea_fish-main.zip** contains the R code used for the paper ["Regime shift dynamics, tipping points and the success of fisheries management" by Blöcker et al. 2023](doi.org/10.1038/s41598-022-27104-y) .
 
     -   Use: It includes code used in the analysis for change points (Spawning Stock Biomass (SSB)), hysteresis and Stock Recruitment Relationship (SRR).
