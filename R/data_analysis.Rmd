@@ -25,12 +25,10 @@ library(ggplot2)
 ## Import data
 ```{r}
 load("data/SSB_full.Rdata")
-load("data/SSB_LAI.Rdata")
 ```
 
 # Change-points
-## Full stock
-### Identify change-points
+## Identify change-points
 ```{r}
 ### cpt analysis
 ssbcpts <- cpt.mean(data = SSB_full$SSB, method = "BinSeg", Q = 6)
@@ -51,7 +49,7 @@ which(bcp.ssb$posterior.prob >= 0.5)
 #### Opinion: would include 1986/1983 (looks significant) as only detected by BinSeg
 ```
 
-### Plot Change-point regimes
+## Plot Change-point regimes
 ```{r}
 ### Load plotting function from "functions.R"
 source("R/functions.R")
@@ -67,146 +65,6 @@ plot_SSB_cpt_full <- plot_SSB_cpt(data = SSB_full,
               u_bnd_column = "u_bnd", 
               show_hlines = TRUE)
 plot_SSB_cpt_full
-```
-
-
-## Components
-### Identify change-points
-```{r}
-# Shetland / Orkney
-### cpts analysis
-ssbcpts <- cpt.mean(data = SSB_LAI$SSB_component[SSB_LAI$component == "Shetland_Orkney"], method = "BinSeg", Q = 6)
-plot(ssbcpts, type = "l", cpt.col = "navyblue", xlab = "Index", pt.widt = 4)
-cpts(ssbcpts)
-SSB_LAI$year[SSB_LAI$component == "Shetland_Orkney"][c(12, 19, 23, 25, 34, 43)]
-#### Index: 12,   19,   23,   25,   34,   43
-#### Years: 1983, 1990, 1994, 1996, 2005, 2014
-
-### bcp analysis
-bcp.ssb <- bcp(SSB_LAI$SSB_component[SSB_LAI$component == "Shetland_Orkney"])
-plot(bcp.ssb, main = "SSB")
-which(bcp.ssb$posterior.prob >= 0.7)
-SSB_LAI$year[SSB_LAI$component == "Shetland_Orkney"][c(12, 19, 23, 31, 34, 43)]
-#### Index: 12,   19,   23,   31,   34,   43
-#### Years: 1983, 1990, 1994, 2002, 2005, 2014
-
-#### Changepoints detected by both methods +-1 year and min. 5 years between points:
-#### 1983, 1990, 2005, 2014
-
-#---------------------------------------------------------------------
-
-# Buchan
-### cpts analysis
-ssbcpts <- cpt.mean(data = SSB_LAI$SSB_component[SSB_LAI$component == "Buchan"], method = "BinSeg", Q = 6)
-plot(ssbcpts, type = "l", cpt.col = "navyblue", xlab = "Index", pt.widt = 4)
-cpts(ssbcpts)
-SSB_LAI$year[SSB_LAI$component == "Buchan"][c(15, 18, 22, 38, 40, 47)]
-#### Index: 11,   18,   22,   38,   40,   47
-#### Years: 1986, 1989, 1993, 2009, 2011, 2018
-
-### bcp analysis
-bcp.ssb <- bcp(SSB_LAI$SSB_component[SSB_LAI$component == "Buchan"])
-plot(bcp.ssb, main = "SSB")
-which(bcp.ssb$posterior.prob >= 0.7)
-SSB_LAI$year[SSB_LAI$component == "Shetland_Orkney"][c(18, 30, 39, 47)]
-#### Index: 18-23, 30,  39,   46-47
-#### Years: 1989, 2001, 2010, 2018
-
-#### Changepoints detected by both methods +-1 year and min. 5 years between points:
-#### 1989, 2009, 2018
-
-#---------------------------------------------------------------------
-
-# Banks
-### cpts analysis
-ssbcpts <- cpt.mean(data = SSB_LAI$SSB_component[SSB_LAI$component == "Banks"], method = "BinSeg", Q = 6)
-plot(ssbcpts, type = "l", cpt.col = "navyblue", xlab = "Index", pt.widt = 4)
-cpts(ssbcpts)
-SSB_LAI$year[SSB_LAI$component == "Banks"][c(11, 19, 29, 34, 38, 48)]
-#### Index: 11,   19,   29,   34,   38,   48
-#### Years: 1982, 1990, 2000, 2005, 2009, 2018
-
-### bcp analysis
-bcp.ssb <- bcp(SSB_LAI$SSB_component[SSB_LAI$component == "Banks"])
-plot(bcp.ssb, main = "SSB")
-which(bcp.ssb$posterior.prob >= 0.7)
-SSB_LAI$year[SSB_LAI$component == "Banks"][c(12, 19, 29, 30, 34)]
-#### Index: 12,   19,   29,   30,   34
-#### Years: 1983, 1990, 2000, 2001, 2005
-
-#### Changepoints detected by both methods +-1 year and min. 5 years between points:
-#### 1982, 1990, 2000 nur BinSang 2018
-
-#---------------------------------------------------------------------
-
-# Downs
-### cpts analysis
-ssbcpts <- cpt.mean(data = SSB_LAI$SSB_component[SSB_LAI$component == "Downs"], method = "BinSeg", Q = 6)
-plot(ssbcpts, type = "l", cpt.col = "navyblue", xlab = "Index", pt.widt = 4)
-cpts(ssbcpts)
-SSB_LAI$year[SSB_LAI$component == "Downs"][c(16, 28, 30, 40, 44, 50)]
-#### Index: 16,   28,   30,   40,   44,   50
-#### Years: 1987, 1999, 2001, 2011, 2015, 2021
-
-### bcp analysis
-bcp.ssb <- bcp(SSB_LAI$SSB_component[SSB_LAI$component == "Downs"])
-plot(bcp.ssb, main = "SSB")
-which(bcp.ssb$posterior.prob >= 0.7)
-SSB_LAI$year[SSB_LAI$component == "Downs"][c(30, 40, 44)]
-#### Index: 30,   40,   44,
-#### Years: 2001, 2011, 2015
-
-#### Changepoints detected by both methods +-1 year and min. 5 years between points:
-#### 2001, 2011     nur BinSang 1987, 2021
-
-
-```
-
-### Plot SSB change points
-```{r}
-### Shetland Orkney
-plot_SSB_cpt_SHOR <- plot_SSB_cpt(data = SSB_LAI[SSB_LAI$component == "Shetland_Orkney", ], 
-              changepoints = c(1983, 1990, 2005, 2014),
-              component = "Shetland / Orkney", 
-              SSB_column = "SSB_component", 
-              l_bnd_column = "l_bnd_component", 
-              u_bnd_column = "u_bnd_component",
-              show_hlines = FALSE)
-plot_SSB_cpt_SHOR
-
-### Buchan
-plot_SSB_cpt_Buchan <- plot_SSB_cpt(data = SSB_LAI[SSB_LAI$component == "Buchan", ], 
-              changepoints = c(1989, 2009, 2018),
-              component = "Buchan", 
-              SSB_column = "SSB_component", 
-              l_bnd_column = "l_bnd_component", 
-              u_bnd_column = "u_bnd_component", 
-              show_hlines = FALSE)
-plot_SSB_cpt_Buchan
-
-### Banks
-plot_SSB_cpt_Banks <- plot_SSB_cpt(data = SSB_LAI[SSB_LAI$component == "Banks", ], 
-              changepoints = c(1982, 1990, 2000, 2018),
-              ribbon_colors = c("steelblue", "orange", "purple", "lightgreen", "grey"),
-              vline_colors = c("black", "black", "black", "grey"),
-              component = "Banks", 
-              SSB_column = "SSB_component", 
-              l_bnd_column = "l_bnd_component", 
-              u_bnd_column = "u_bnd_component", 
-              show_hlines = FALSE)
-plot_SSB_cpt_Banks
-
-### Downs
-plot_SSB_cpt_Downs <- plot_SSB_cpt(data = SSB_LAI[SSB_LAI$component == "Downs", ], 
-              changepoints = c(1987, 2001, 2011, 2021),
-              ribbon_colors = c("grey", "steelblue", "orange", "purple", "grey"),
-              vline_colors = c("grey", "black", "black","grey"),
-              component = "Downs", 
-              SSB_column = "SSB_component", 
-              l_bnd_column = "l_bnd_component", 
-              u_bnd_column = "u_bnd_component", 
-              show_hlines = FALSE)
-plot_SSB_cpt_Downs
 ```
 
 ## Save plots

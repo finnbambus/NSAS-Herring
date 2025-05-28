@@ -26,4 +26,7 @@ The "data" folder contains the .Rdata files used for analysis. The files are pro
     -   Variables: year, component, LAI_perc. [%], SSB_component [t], l_bnd (lower bound) [t], u_bnd (upper bound) [t]
 -   **SSB_full** contains the SSB time-series for the full stock as well as a coefficient variance and lower and upper bounds.
     -   Type: tibble
-    -   Variales: year, SSB [t], cv, l_bnd [t], u_bnd [t]
+    -   Variables: year, SSB [t], cv, l_bnd [t], u_bnd [t]
+-   **ICES_data** contains the data from the latest ICES assessment (Dec. 2024). since SSB data from 2025 was received, only F data is used from here.
+    -   Type: Data frame
+    -   Variables: year, recruitment_low [thousands], Recruitment [thousands], recruitment_high [thousands], SSB_low [t], SSB [t], SSB_high [t], total_catch [t], F_low, F, F_high

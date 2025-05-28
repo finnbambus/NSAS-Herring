@@ -10,7 +10,6 @@ knitr::opts_knit$set(root.dir = normalizePath(".."))
 ```
 
 # Load packages
-
 ```{r}
 setwd("~/R Studio/NSAS Herring/NSAS-Herring")
 
@@ -23,9 +22,7 @@ library(reshape2)
 ```
 
 # Load and clean files
-
 ## LAI data import
-
 ```{r}
 ## Read LAI .txt data, rename its columns & convert from century break to full year
 LAI_full <- read.table("data raw/NSAS LAI.txt", header = TRUE, strip.white = TRUE) %>%
@@ -72,8 +69,13 @@ SSB_LAI <- SSB_full %>%
   drop_na()
 ```
 
-## Environmental .nc data import
+## ICES data import
+```{r}
+ICES_data <- read.table("data raw/NSAS ICES data 2024.txt", sep = ",", header = TRUE)
+```
 
+
+## Environmental .nc data import
 ```{r}
 ## Load function from "functions.R"
 source("R/functions.R")
@@ -83,16 +85,13 @@ env_data_full <- load_environmental_data("data raw/NS SSt Monthly.nc", "data raw
 ```
 
 ### Splitting environmental data by components
-
 ```{r}
 ## Call the function and store result in environment (function in "functions.R")
 env_data_subset <- subset_environmental_data(env_data_full)
 ```
 
 # First visual investigation
-
 ## LAI data visualization
-
 ```{r}
 ## Plot timeseries of LAI by component
 ### Add LAI by year
@@ -173,7 +172,6 @@ plot_SSB_component_b
 ```
 
 ## Environmental data visualization
-
 ```{r}
 ## Call function and plot combined data (function in "functions.R")
 plot_env_data_full <- plot_environmental_ts(env_data_full, "Overall North Sea")
@@ -192,9 +190,7 @@ print(plot_env_data_Downs)
 ```
 
 # Save data and plots
-
 ## Save rdata
-
 ```{r}
 ### LAI data
 save(LAI_full, file = file.path("data/", "LAI_full.Rdata"))
@@ -202,14 +198,15 @@ save(LAI_aggregated, file = file.path("data/", "LAI_aggregated.Rdata"))
 save(SSB_full, file = file.path("data/", "SSB_full.Rdata"))
 save(SSB_LAI, file = file.path("data/", "SSB_LAI.Rdata"))
 
+### ICES data
+save(ICES_data, file = file.path("data/", "ICES_data.Rdata"))
 
-# Environmental data
+### Environmental data
 save(env_data_full, file = file.path("data/", "env_data_full.Rdata"))
 save(env_data_subset, file = file.path("data/", "env_data_subset.Rdata"))
 ```
 
 ## Save plots
-
 ```{r}
 ### LAI plots
 ggsave(filename = file.path("plots/", "LAI_by_year.png"),
@@ -282,38 +279,4 @@ ggsave(filename = file.path("plots/", "env_Shetland_Orkneys.png"),
        width = 10,
        height = 10,
        dpi = 300)
-```
-
-
-
-
-
-
-
-
-
-```{r}
-SSB_full_renamed <- SSB_full %>%
-  rename(
-    SSB_component = SSB,
-    l_bnd_component = l_bnd,
-    u_bnd_component = u_bnd
-  ) %>%
-  mutate(component = "Full Stock")
-
-SSB_combined <- bind_rows(SSB_LAI, SSB_full_renamed)
-
-plot_SSB_combined <- ggplot(SSB_combined, aes(x = year, y = SSB_component / 1e6, color = component, fill = component)) +
-  geom_ribbon(aes(ymin = l_bnd_component / 1e6,
-                  ymax = u_bnd_component / 1e6), alpha = 0.3, color = NA) +
-  geom_line(linewidth = 0.9) +
-  labs(title = "SSB with 95% Confidence Bounds (Components + Full Stock)",
-       x = "Year",
-       y = "SSB in million tonnes") +
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5),
-        axis.title.x = element_text(margin = margin(t = 10)),
-        axis.title.y = element_text(margin = margin(r = 10)))
-
-plot_SSB_combined
 ```
