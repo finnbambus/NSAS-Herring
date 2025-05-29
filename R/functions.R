@@ -57,6 +57,7 @@ load_environmental_data <- function(sst_file, sbt_file, sss_file) {
   
   return(env_data_full)}
 
+
 #--------------------------------------------------------------------------------------
 ## Subset environmental data by components
 #--------------------------------------------------------------------------------------
@@ -98,6 +99,7 @@ subset_environmental_data <- function(combined_data) {
     environmental_subsets_by_area[[area_name]] <- subset_env_list}
   
   return(environmental_subsets_by_area)}
+
 
 #--------------------------------------------------------------------------------------
 ## Plot environmental data
@@ -159,6 +161,7 @@ plot_environmental_ts <- function(data_list, plot_area_title) {
     theme(legend.position = "none")
   
   return(p)}
+
 
 # Functions for "data_analysis.Rmd"
 #--------------------------------------------------------------------------------------
@@ -234,4 +237,20 @@ plot_SSB_cpt <- function(data, changepoints, component, SSB_column, l_bnd_column
                          alpha = 0.5)}
   
   return(p)}
-  
+
+
+#--------------------------------------------------------------------------------------
+## Plot SSB change-points
+#--------------------------------------------------------------------------------------
+
+opt_bpts <- function(x) {
+  #x = bpts_sum$RSS["BIC",]
+  n <- length(x)
+  lowest <- vector("logical", length = n-1)
+  lowest[1] <- FALSE
+  for (i in 2:n) {
+    lowest[i] <- x[i] < x[i-1] & x[i] < x[i+1]
+  }
+  out <- as.integer(names(x)[lowest])
+  return(out)
+}
