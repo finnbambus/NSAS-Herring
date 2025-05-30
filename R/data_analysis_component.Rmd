@@ -8,7 +8,9 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_knit$set(root.dir = normalizePath(".."))
 ```
+
 ## Load Packages
+
 ```{r}
 setwd("~/R Studio/NSAS Herring/NSAS-Herring")
 
@@ -21,14 +23,16 @@ library(readxl)
 library(ggplot2)
 ```
 
-# Data Analsysis
 ## Import data
+
 ```{r}
 load("data/SSB_LAI.Rdata")
 ```
 
 # Change-points
+
 ## Identify change-points
+
 ```{r}
 # Shetland / Orkney
 ### cpts analysis
@@ -119,7 +123,8 @@ SSB_LAI$year[SSB_LAI$component == "Downs"][c(30, 40, 44)]
 
 ```
 
-## Plot SSB change points
+## Plot change-points
+
 ```{r}
 ### Shetland Orkney
 plot_SSB_cpt_SHOR <- plot_SSB_cpt(data = SSB_LAI[SSB_LAI$component == "Shetland_Orkney", ], 
@@ -167,6 +172,7 @@ plot_SSB_cpt_Downs
 ```
 
 ### Save plots
+
 ```{r}
 ggsave(filename = file.path("plots/", "SSB_cpt_components.png"),
        plot = gridExtra::grid.arrange(plot_SSB_cpt_SHOR, 

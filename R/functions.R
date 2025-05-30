@@ -240,7 +240,7 @@ plot_SSB_cpt <- function(data, changepoints, component, SSB_column, l_bnd_column
 
 
 #--------------------------------------------------------------------------------------
-## Plot SSB change-points
+## Extract optimal breakpoint
 #--------------------------------------------------------------------------------------
 
 opt_bpts <- function(x) {
@@ -252,5 +252,82 @@ opt_bpts <- function(x) {
     lowest[i] <- x[i] < x[i-1] & x[i] < x[i+1]
   }
   out <- as.integer(names(x)[lowest])
-  return(out)
-}
+  return(out)}
+
+
+#--------------------------------------------------------------------------------------
+## Plot Hysteresis
+#--------------------------------------------------------------------------------------
+
+plot_hysteresis <- function(data, break_years, component,
+                            msy_btrigger = 1130747, 
+                            fmsy = 0.32,
+                            colors = c("steelblue", "darkorange", "purple", "lightgreen", "indianred")) {
+  
+  # Determine number of break years
+  n_breaks <- length(break_years)
+  n_phases <- n_breaks + 1
+  
+  # Create phase assignment vector
+  phase_assignment <- rep(1, nrow(data))
+  for (i in 1:n_breaks) {
+    phase_assignment[data$year > break_years[i]] <- i + 1}
+  
+  # Assign colors based on phase
+  hyst_phases <- colors[phase_assignment]
+  
+  # Create list of phase data
+  phase_data_list <- list()
+  for (i in 1:n_phases) {
+    if (i == 1) {
+      # First phase: up to first break year
+      phase_data_list[[i]] <- data %>% filter(year <= break_years[1])
+    } else if (i == n_phases) {
+      # Last phase: after last break year
+      phase_data_list[[i]] <- data %>% filter(year > break_years[n_breaks])
+    } else {
+      # Middle phases: between break years
+      phase_data_list[[i]] <- data %>% filter(year > break_years[i-1] & year <= break_years[i])}}
+  
+  # Create the plot
+  p <- ggplot(data = data, aes(x = F, y = SSB/1000000)) +
+    geom_path(colour = "grey") +
+    geom_hline(yintercept = msy_btrigger/1000000, linetype = "dashed", color = "gray30") +
+    geom_vline(xintercept = fmsy, linetype = "dashed", color = "gray30") +
+    geom_label(x = fmsy, y = 3, label = expression("F"[MSY]), 
+               color = "gray30", size = 3.5) +
+    geom_label(x = 0.8, y = msy_btrigger/1000000, label = expression("MSY B"[trigger]), 
+               color = "gray30", size = 3.5, fontface = "bold") +
+    geom_point(colour = hyst_phases) +
+    theme_minimal() +
+    labs(title = paste("Hysteresis in", component), x = "F", y = "SSB in millions") +
+    theme(plot.title = element_text(hjust = 0.5))
+  
+  # Add geom_smooth for each phase (only if data exists)
+  for (i in 1:n_phases) {
+    if (nrow(phase_data_list[[i]]) > 0) {
+      p <- p + geom_smooth(data = phase_data_list[[i]], aes(x = F, y = SSB/1000000),
+                           method = "lm", colour = colors[i])}}
+  
+  # Add text labels for break years (only for existing break years)
+  # Define nudge parameters for each break year position
+  nudge_params <- list(
+    list(nudge_y = 0, nudge_x = 0.2),
+    list(nudge_y = -0.2, nudge_x = 0.05),
+    list(nudge_y = 0, nudge_x = -0.2),
+    list(nudge_y = 0, nudge_x = 0.2))
+  
+  for (i in 1:n_breaks) {
+    break_year_data <- data %>% filter(year == break_years[i])
+    if (nrow(break_year_data) > 0) {
+      nudge_y <- if (i <= length(nudge_params)) nudge_params[[i]]$nudge_y else 0
+      nudge_x <- if (i <= length(nudge_params)) nudge_params[[i]]$nudge_x else 0
+      
+      p <- p + geom_text_repel(data = break_year_data, aes(label = year),
+                               point.padding = 0.2, nudge_y = nudge_y, nudge_x = nudge_x,
+                               size = 3, col = "black", segment.size = 0.2)}}
+  p <- p + geom_text_repel(data = data[c(1, length(data$year)),], aes(label = year),
+                           point.padding = 0.2, nudge_y = 0, nudge_x = -0.1,
+                           size = 3, col = "black", segment.size = 0.2)
+  
+  return(p)}

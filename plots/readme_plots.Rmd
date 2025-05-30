@@ -20,3 +20,5 @@ The Folder "plots" contains plots generated inside the R code of this project.
 -   **SSB** shows the Spawning-Stock-Biomass (SSB), including the 95% confidence interval, over time.
 
 -   **SSB_component** subsets the SSB into the components using the LAI percent values.
+
+-   **Hysteresis** shows the pattern of hysteresis for the full stock and individuall components.
