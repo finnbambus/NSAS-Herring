@@ -299,8 +299,8 @@ plot_hysteresis <- function(data, break_years, component,
     geom_label(x = 0.8, y = msy_btrigger/1000000, label = expression("MSY B"[trigger]), 
                color = "gray30", size = 3.5, fontface = "bold") +
     geom_point(colour = hyst_phases) +
-    theme_minimal() +
     labs(title = paste("Hysteresis in", component), x = "F", y = "SSB in millions") +
+    theme_minimal() +
     theme(plot.title = element_text(hjust = 0.5))
   
   # Add geom_smooth for each phase (only if data exists)

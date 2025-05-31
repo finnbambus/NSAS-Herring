@@ -95,9 +95,10 @@ ccf(SSB_full$SSB[-(78:79)], ICES_data$F, type = "correlation") # 3 years lag
 
 #### Make time-lag object
 SSB_F_lag <- tibble(
-  year = SSB_full$year[-(77:79)],
-  SSB = SSB_full$SSB[-(1:3)],
-  F = ICES_data$F[-(78:77)])
+  year = SSB_full$year[-c(1:3, 77)],
+  SSB = SSB_full$SSB[-(76:79)],
+  F = ICES_data$F[-(1:3)],
+  R = ICES_data$Recruitment[-(1:3)])
 
 
 ### Break-point analysis
@@ -111,7 +112,7 @@ opt_brks #### 4
 bpts2 <- strucchange:: breakpoints(bpts, breaks = opt_brks)
 best_brk <- SSB_F_lag$F[bpts2$breakpoints]
 best_brk
-####  0.32 0.34 0.32
+####  0.25 1.43 0.43 0.22
 
 par(mfrow = c(1,1))
 ci_mod <- confint(bpts, breaks = opt_brks)
@@ -124,7 +125,7 @@ for (i in 1: opt_brks) {
 ### Get corresponding years:
 best_brk_years <- SSB_F_lag$year[bpts2$breakpoints]
 best_brk_years
-#### 1962, 1977, 1991
+#### 1960, 1971, 1986, 2000
 ```
 
 ## Plotting
@@ -187,4 +188,23 @@ ggsave(filename = file.path("plots/", "hysteresis_full.png"),
        width = 10,
        height = 10,
        dpi = 300)
+```
+
+# SRR Non-Stationary
+
+## Analysis
+
+```{r}
+plot_SRR_full <- ggplot(data = SSB_F_lag, aes(x = SSB/1000000, y = R/1000)) +
+  geom_point(aes(color = cut(year, 
+                            breaks = c(1950, 1960, 1971, 1986, 2000, 2025),
+                            labels = c("1950-1960", "1960-1971", "1971-1986", "1986-2000", "2000-2025"),
+                            include.lowest = TRUE))) +
+  scale_color_manual(values = c("steelblue", "darkorange", "purple", "lightgreen", "indianred"),
+                     name = "Time Period") +
+  labs(x = "SSB in million t", y = "R in billions", title = "SRR Full Stock") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+plot_SRR_full
+
 ```
