@@ -331,3 +331,335 @@ plot_hysteresis <- function(data, break_years, component,
                            size = 3, col = "black", segment.size = 0.2)
   
   return(p)}
+
+
+#--------------------------------------------------------------------------------------
+## Test different Models
+#--------------------------------------------------------------------------------------
+
+# Simplified Stock-Recruitment Relationship Modeling (Fixed)
+# ============================================================
+
+# Helper Functions ----
+rmse <- function(sim, obs) {
+  sqrt(mean((obs - sim)^2, na.rm = TRUE))
+}
+
+check_data_columns <- function(data, required_cols) {
+  missing_cols <- setdiff(required_cols, names(data))
+  if (length(missing_cols) > 0) {
+    stop(paste("Missing columns in data:", paste(missing_cols, collapse = ", ")))
+  }
+}
+
+fit_glm_models <- function(data, recruit_col = "R", ssb_col = "SSB") {
+  # Check if columns exist
+  check_data_columns(data, c(recruit_col, ssb_col))
+  
+  # Create formula
+  formula_str <- paste(recruit_col, "~", ssb_col)
+  formula_obj <- as.formula(formula_str)
+  
+  models <- list(
+    gaussian = glm(formula_obj, data = data, family = gaussian),
+    poisson = glm(formula_obj, data = data, family = poisson),
+    quasipoisson = glm(formula_obj, data = data, family = quasipoisson),
+    negbinom = MASS::glm.nb(formula_obj, data = data)
+  )
+  
+  # Calculate overdispersion
+  overdispersion <- sapply(models, function(m) {
+    deviance(m) / df.residual(m)
+  })
+  
+  list(models = models, overdispersion = overdispersion)
+}
+
+# Main Modeling Functions ----
+
+# 1. Basic Models
+fit_independence_model <- function(data, recruit_col = "R", ssb_col = "ssb") {
+  check_data_columns(data, c(recruit_col, ssb_col))
+  
+  # Create formula and fit model
+  formula_str <- paste(recruit_col, "~", ssb_col)
+  model <- lm(as.formula(formula_str), data = data)
+  
+  list(model = model, fitted = fitted(model))
+}
+
+fit_beverton_holt <- function(data, recruit_col = "R", ssb_col = "ssb") {
+  check_data_columns(data, c(recruit_col, ssb_col))
+  
+  # Create formula for srStarts
+  formula_str <- paste(recruit_col, "~", ssb_col)
+  formula_obj <- as.formula(formula_str)
+  
+  tryCatch({
+    sv <- FSA::srStarts(formula_obj, data = data, type = "BevertonHolt")
+    bh <- FSA::srFuns("BevertonHolt")
+    
+    # Create log formula for nls
+    log_formula_str <- paste("log(", recruit_col, ") ~ log(bh(", ssb_col, ", a, b))")
+    model <- nls(as.formula(log_formula_str), data = data, start = sv)
+    
+    fitted_vals <- bh(data[[ssb_col]], a = coef(model))
+    r2 <- cor(fitted_vals, data[[recruit_col]])^2
+    
+    list(model = model, fitted = fitted_vals, r2 = r2)
+  }, error = function(e) {
+    warning(paste("Beverton-Holt model failed:", e$message))
+    list(model = NULL, fitted = NULL, r2 = NULL)
+  })
+}
+
+fit_ricker <- function(data, recruit_col = "R", ssb_col = "ssb") {
+  check_data_columns(data, c(recruit_col, ssb_col))
+  
+  # Create formula for srStarts
+  formula_str <- paste(recruit_col, "~", ssb_col)
+  formula_obj <- as.formula(formula_str)
+  
+  tryCatch({
+    sv <- FSA::srStarts(formula_obj, data = data, type = "Ricker")
+    rckr <- FSA::srFuns("Ricker")
+    
+    # Create log formula for nls
+    log_formula_str <- paste("log(", recruit_col, ") ~ log(rckr(", ssb_col, ", a, b))")
+    model <- nls(as.formula(log_formula_str), data = data, start = sv)
+    
+    fitted_vals <- rckr(data[[ssb_col]], a = coef(model))
+    
+    list(model = model, fitted = fitted_vals)
+  }, error = function(e) {
+    warning(paste("Ricker model failed:", e$message))
+    list(model = NULL, fitted = NULL)
+  })
+}
+
+# 2. Segmented Models
+fit_segmented_models <- function(data, recruit_col = "R", ssb_col = "SSB") {
+  check_data_columns(data, c(recruit_col, ssb_col))
+  
+  mean_ssb <- mean(data[[ssb_col]], na.rm = TRUE)
+  mean_ssb_log <- mean(log(data[[ssb_col]]), na.rm = TRUE)
+  
+  results <- list()
+  
+  # Regular segmented
+  tryCatch({
+    formula_str <- paste(recruit_col, "~", ssb_col)
+    base_model <- lm(as.formula(formula_str), data = data)
+    seg_formula_str <- paste("~", ssb_col)
+    
+    seg_regular <- segmented::segmented(
+      base_model, 
+      seg.Z = as.formula(seg_formula_str), 
+      psi = mean_ssb
+    )
+    
+    results$regular <- list(
+      model = seg_regular,
+      fitted = seg_regular$fitted.values,
+      breakpoint = seg_regular$psi[2],
+      breakpoint_se = seg_regular$psi[3]
+    )
+  }, error = function(e) {
+    warning(paste("Regular segmented model failed:", e$message))
+    results$regular <- list(model = NULL, fitted = NULL, breakpoint = NULL, breakpoint_se = NULL)
+  })
+  
+  # Log-transformed segmented
+  tryCatch({
+    data$r_log <- log(data[[recruit_col]])
+    data$ssb_log <- log(data[[ssb_col]])
+    
+    base_model_log <- lm(r_log ~ ssb_log, data = data)
+    seg_log <- segmented::segmented(
+      base_model_log, 
+      seg.Z = ~ssb_log, 
+      psi = mean_ssb_log
+    )
+    
+    results$log <- list(
+      model = seg_log,
+      fitted = seg_log$fitted.values,
+      breakpoint = seg_log$psi[2],
+      breakpoint_se = seg_log$psi[3]
+    )
+  }, error = function(e) {
+    warning(paste("Log segmented model failed:", e$message))
+    results$log <- list(model = NULL, fitted = NULL, breakpoint = NULL, breakpoint_se = NULL)
+  })
+  
+  # Negative binomial segmented
+  tryCatch({
+    formula_str <- paste(recruit_col, "~", ssb_col)
+    base_model_nb <- MASS::glm.nb(as.formula(formula_str), data = data)
+    seg_formula_str <- paste("~", ssb_col)
+    
+    seg_negbi <- segmented::segmented(
+      base_model_nb, 
+      seg.Z = as.formula(seg_formula_str), 
+      psi = mean_ssb
+    )
+    
+    results$negbinom <- list(
+      model = seg_negbi,
+      fitted = seg_negbi$fitted.values,
+      breakpoint = seg_negbi$psi[2],
+      breakpoint_se = seg_negbi$psi[3]
+    )
+  }, error = function(e) {
+    warning(paste("Negative binomial segmented model failed:", e$message))
+    results$negbinom <- list(model = NULL, fitted = NULL, breakpoint = NULL, breakpoint_se = NULL)
+  })
+  
+  return(results)
+}
+
+# 3. Structural Change Model
+fit_strucchange <- function(data, recruit_col = "R", ssb_col = "SSB") {
+  check_data_columns(data, c(recruit_col, ssb_col))
+  
+  tryCatch({
+    formula_str <- paste(recruit_col, "~", ssb_col)
+    bpts <- strucchange::breakpoints(as.formula(formula_str), data = data)
+    bpts_sum <- summary(bpts)
+    
+    # Find optimal breakpoints
+    opt_bpts <- function(x) {
+      n <- length(x)
+      if (n <= 1) return(integer(0))
+      
+      lowest <- vector("logical", length = n - 1)
+      lowest[1] <- FALSE
+      for (i in 2:n) {
+        lowest[i] <- x[i] < x[i-1] & x[i] < x[i+1]
+      }
+      as.integer(names(x)[lowest])
+    }
+    
+    opt_brks <- opt_bpts(bpts_sum$RSS["BIC", ])
+    
+    if (length(opt_brks) > 0 && opt_brks[1] > 0) {
+      bpts2 <- strucchange::breakpoints(bpts, breaks = opt_brks)
+      best_brk <- data[[ssb_col]][bpts2$breakpoints]
+      
+      # Fit segmented model (simplified for 2 breakpoints)
+      if (length(best_brk) >= 2) {
+        # Create the complex formula
+        formula_complex <- as.formula(paste(
+          recruit_col, "~", ssb_col, "* (", ssb_col, "<=", best_brk[1], ") +",
+          ssb_col, "* (", ssb_col, ">=", best_brk[1], "&", ssb_col, "<=", best_brk[2], ") +",
+          ssb_col, "* (", ssb_col, ">=", best_brk[2], ")"
+        ))
+        
+        model <- lm(formula_complex, data = data)
+        
+        list(model = model, breakpoints = best_brk, bpts_obj = bpts)
+      } else {
+        list(model = NULL, breakpoints = NULL, bpts_obj = bpts)
+      }
+    } else {
+      list(model = NULL, breakpoints = NULL, bpts_obj = bpts)
+    }
+  }, error = function(e) {
+    warning(paste("Structural change model failed:", e$message))
+    list(model = NULL, breakpoints = NULL, bpts_obj = NULL)
+  })
+}
+
+# Model Comparison Function ----
+compare_models <- function(models_list, observed_data) {
+  model_names <- names(models_list)
+  n_models <- length(models_list)
+  
+  # Initialize comparison dataframe
+  comparison <- data.frame(
+    Model = model_names,
+    AIC = numeric(n_models),
+    RMSE = numeric(n_models),
+    stringsAsFactors = FALSE
+  )
+  
+  for (i in seq_along(models_list)) {
+    model_info <- models_list[[i]]
+    
+    if (!is.null(model_info) && !is.null(model_info$model) && !is.null(model_info$fitted)) {
+      tryCatch({
+        comparison$AIC[i] <- AIC(model_info$model)
+        comparison$RMSE[i] <- rmse(model_info$fitted, observed_data)
+      }, error = function(e) {
+        comparison$AIC[i] <- NA
+        comparison$RMSE[i] <- NA
+      })
+    } else {
+      comparison$AIC[i] <- NA
+      comparison$RMSE[i] <- NA
+    }
+  }
+  
+  return(comparison)
+}
+
+# Main Analysis Workflow ----
+run_srr_analysis <- function(ns_data, plaice_data, 
+                             ns_recruit_col = "R", ns_ssb_col = "ssb",
+                             plaice_recruit_col = "R", plaice_ssb_col = "SSB") {
+  
+  cat("Starting SRR analysis...\n")
+  
+  # Initialize results
+  models <- list()
+  
+  # Basic models (using ns_data)
+  cat("Fitting independence model...\n")
+  models$independence <- fit_independence_model(ns_data, ns_recruit_col, ns_ssb_col)
+  
+  cat("Fitting Beverton-Holt model...\n")
+  models$beverton_holt <- fit_beverton_holt(ns_data, ns_recruit_col, ns_ssb_col)
+  
+  cat("Fitting Ricker model...\n")
+  models$ricker <- fit_ricker(ns_data, ns_recruit_col, ns_ssb_col)
+  
+  # Segmented models (using plaice data)
+  cat("Fitting segmented models...\n")
+  segmented_models <- fit_segmented_models(plaice_data, plaice_recruit_col, plaice_ssb_col)
+  models$segmented <- segmented_models
+  
+  # Structural change model
+  cat("Fitting structural change model...\n")
+  models$strucchange <- fit_strucchange(plaice_data, plaice_recruit_col, plaice_ssb_col)
+  
+  # GLM model comparison
+  cat("Comparing GLM models...\n")
+  glm_results <- fit_glm_models(plaice_data, plaice_recruit_col, plaice_ssb_col)
+  
+  # Model comparison
+  models_for_comparison <- list(
+    independence = models$independence,
+    beverton_holt = models$beverton_holt,
+    ricker = models$ricker,
+    segmented_regular = segmented_models$regular,
+    segmented_log = segmented_models$log,
+    segmented_negbi = segmented_models$negbinom
+  )
+  
+  cat("Comparing models...\n")
+  comparison <- compare_models(models_for_comparison, plaice_data[[plaice_recruit_col]])
+  
+  cat("Analysis complete!\n")
+  
+  return(list(
+    models = models,
+    glm_results = glm_results,
+    comparison = comparison
+  ))
+}
+
+# Example usage with your variable names:
+# results <- run_srr_analysis(ns_data, plaice, 
+#                            ns_recruit_col = "R", ns_ssb_col = "ssb",
+#                            plaice_recruit_col = "R", plaice_ssb_col = "SSB")
+# print(results$comparison)

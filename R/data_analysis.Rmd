@@ -21,6 +21,8 @@ library(tidyverse)
 library(ggrepel)
 library(readxl)
 library(ggplot2)
+library(segmented)
+library(FSA)
 ```
 
 ## Import data
@@ -195,6 +197,7 @@ ggsave(filename = file.path("plots/", "hysteresis_full.png"),
 ## Analysis
 
 ```{r}
+### Plot SBB over R
 plot_SRR_full <- ggplot(data = SSB_F_lag, aes(x = SSB/1000000, y = R/1000)) +
   geom_point(aes(color = cut(year, 
                             breaks = c(1950, 1960, 1971, 1986, 2000, 2025),
@@ -207,4 +210,11 @@ plot_SRR_full <- ggplot(data = SSB_F_lag, aes(x = SSB/1000000, y = R/1000)) +
   theme(plot.title = element_text(hjust = 0.5))
 plot_SRR_full
 
+
+results <- run_srr_analysis(
+  SSB_F_lag, ICES_data, 
+  ns_recruit_col = "R", ns_ssb_col = "SSB",
+  plaice_recruit_col = "Recruitment", plaice_ssb_col = "SSB")
+
+print(results$comparison)
 ```
