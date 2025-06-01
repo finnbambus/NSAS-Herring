@@ -210,11 +210,11 @@ plot_SRR_full <- ggplot(data = SSB_F_lag, aes(x = SSB/1000000, y = R/1000)) +
   theme(plot.title = element_text(hjust = 0.5))
 plot_SRR_full
 
-
+### Run Modelfiting with run_srr_analysis function
 results <- run_srr_analysis(
   SSB_F_lag, ICES_data, 
-  ns_recruit_col = "R", ns_ssb_col = "SSB",
-  plaice_recruit_col = "Recruitment", plaice_ssb_col = "SSB")
+  lag_recruit_col = "R", lag_SSB_col = "SSB",
+  norm_recruit_col = "Recruitment", norm_ssb_col = "SSB")
 
 print(results$comparison)
 ```
