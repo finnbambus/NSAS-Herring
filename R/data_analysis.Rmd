@@ -17,7 +17,6 @@ setwd("~/R Studio/NSAS Herring/NSAS-Herring")
 library(bcp)
 library(changepoint)
 library(tidyverse)
-library(tidyverse)
 library(ggrepel)
 library(readxl)
 library(ggplot2)
@@ -28,8 +27,7 @@ library(FSA)
 ## Import data
 
 ```{r}
-load("data/SSB_full.Rdata")
-load("data/ICES_data.Rdata")
+load("data/Herring_full.Rdata")
 ```
 
 # Change-points
@@ -38,14 +36,14 @@ load("data/ICES_data.Rdata")
 
 ```{r}
 ### cpt analysis
-ssbcpts <- cpt.mean(data = SSB_full$SSB, method = "BinSeg", Q = 6)
+ssbcpts <- cpt.mean(data = Herring_full$SSB, method = "BinSeg", Q = 6)
 plot(ssbcpts, type = "l", cpt.col = "navyblue", xlab = "Index", pt.widt = 4)
 cpts(ssbcpts)
 #### Index: 4,    18,   20,   40,   54,   72
 #### years: 1950, 1964, 1966, 1986, 2000, 2018
 
 ### bcp analysis
-bcp.ssb <- bcp(SSB_full$SSB)
+bcp.ssb <- bcp(Herring_full$SSB)
 plot(bcp.ssb, main = "SSB")
 which(bcp.ssb$posterior.prob >= 0.5)
 #### Index: 20,   37,   54
@@ -63,7 +61,7 @@ which(bcp.ssb$posterior.prob >= 0.5)
 source("R/functions.R")
 
 ### Call function plot_SSB_cpt
-plot_SSB_cpt_full <- plot_SSB_cpt(data = SSB_full, 
+plot_SSB_cpt_full <- plot_SSB_cpt(data = Herring_full, 
               changepoints = c(1966, 1986,2000), 
               ribbon_colors = c("steelblue", "orange", "grey", "purple"),
               vline_colors = c("black", "grey", "black"),
@@ -92,19 +90,14 @@ ggsave(filename = file.path("plots/", "SSB_cpt_full.png"),
 
 ```{r}
 ### Check for time-lags
-#SSB_test <- SSB_full[-75,]?
-ccf(SSB_full$SSB[-(78:79)], ICES_data$F, type = "correlation") # 3 years lag
+#SSB_test <- Herring_full[-75,]?
+ccf(Herring_full$SSB[-(79:78)], Herring_full$F[-(79:78)], type = "correlation") # 3 years lag
 
 #### Make time-lag object
-SSB_F_lag <- tibble(
-  year = SSB_full$year[-c(1:3, 77)],
-  SSB = SSB_full$SSB[-(76:79)],
-  F = ICES_data$F[-(1:3)],
-  R = ICES_data$Recruitment[-(1:3)])
-
+Herring_full$SSB_lag <- lag(Herring_full$SSB, 3)
 
 ### Break-point analysis
-bpts <- strucchange::breakpoints(SSB_F_lag$SSB/1000000 ~ SSB_F_lag$F)
+bpts <- strucchange::breakpoints(Herring_full$SSB_lag/1000000 ~ Herring_full$F)
 plot(bpts)
 summary(bpts)
 
@@ -112,73 +105,30 @@ bpts_sum <- summary(bpts)
 opt_brks <- opt_bpts(bpts_sum$RSS["BIC",])
 opt_brks #### 4
 bpts2 <- strucchange:: breakpoints(bpts, breaks = opt_brks)
-best_brk <- SSB_F_lag$F[bpts2$breakpoints]
+best_brk <- Herring_full$F[bpts2$breakpoints]
 best_brk
-####  0.25 1.43 0.43 0.22
+####  0.28 1.09 0.28 0.189
 
 par(mfrow = c(1,1))
 ci_mod <- confint(bpts, breaks = opt_brks)
-plot(SSB_F_lag$SSB/1000000 ~ SSB_F_lag$F, type = "p")
+plot(Herring_full$SSB_lag/1000000 ~ Herring_full$F, type = "p")
 for (i in 1: opt_brks) {
-  abline(v = SSB_F_lag$F[ci_mod$confint[i,2]], col = "blue")
-  abline(v = SSB_F_lag$F[ci_mod$confint[i,1]], col = "red", lty = 3)
-  abline(v = SSB_F_lag$F[ci_mod$confint[i,3]], col = "red", lty = 3)
+  abline(v = Herring_full$F[ci_mod$confint[i,2]], col = "blue")
+  abline(v = Herring_full$F[ci_mod$confint[i,1]], col = "red", lty = 3)
+  abline(v = Herring_full$F[ci_mod$confint[i,3]], col = "red", lty = 3)
 }
 ### Get corresponding years:
-best_brk_years <- SSB_F_lag$year[bpts2$breakpoints]
+best_brk_years <- Herring_full$year[bpts2$breakpoints]
 best_brk_years
-#### 1960, 1971, 1986, 2000
+#### 1957, 1968, 1983, 1997
 ```
 
 ## Plotting
 
 ```{r}
 ### Call function plot_hysteresis
-plot_hysteresis_full <- plot_hysteresis(SSB_F_lag, best_brk_years, "Full Stock")
+plot_hysteresis_full <- plot_hysteresis(Herring_full, best_brk_years, "Full Stock")
 plot_hysteresis_full
-```
-
-```{r}
-hyst_phases <- NULL
-hyst_phases[SSB_F_lag$year <= best_brk_years[1]] <- "steelblue"
-hyst_phases[SSB_F_lag$year > best_brk_years[1] & SSB_F_lag$year <= best_brk_years[2]] <- "darkorange"
-hyst_phases[SSB_F_lag$year > best_brk_years[2] & SSB_F_lag$year <= best_brk_years[3]] <- "purple"
-hyst_phases[SSB_F_lag$year > best_brk_years[3] & SSB_F_lag$year <= best_brk_years[4]] <- "lightgreen"
-hyst_phases[SSB_F_lag$year > best_brk_years[4]] <- "indianred"
-
-SSB_F_lag_breakpoint_hyst <- ggplot(data = SSB_F_lag, aes(x = F, y = SSB/1000))+
-  geom_path(colour = "grey80")+
-  geom_hline(yintercept = 564.599, linetype="dashed",color="gray30")+
-  geom_vline(xintercept = 0.21, linetype="dashed",color="gray30")+
-  geom_label(x = 0.21, y = 1150, label = expression("F"[MSY]), color="gray30", size = 3.5)+
-  geom_label(x = 0.55, y = 564.599, label = expression("MSY B"[trigger]), color="gray30", size = 3.5, fontface = "bold")+
-  #geom_text_repel(aes(x = F, y = SSB/1000, label = year), colour = hyst_phases)+
-  geom_point(colour = hyst_phases)+
-  geom_smooth(data = SSB_F_lag[SSB_F_lag$year <= best_brk_years[1], ], aes(x = F, y = SSB/1000),
-              method = "lm", colour = "steelblue")+
-  geom_smooth(data = SSB_F_lag[SSB_F_lag$year > best_brk_years[1] & SSB_F_lag$year <= best_brk_years[2], ],
-              aes(x = F, y = SSB/1000), method = "lm", colour = "darkorange")+
-  geom_smooth(data = SSB_F_lag[SSB_F_lag$year > best_brk_years[2] & SSB_F_lag$year <= best_brk_years[3], ],
-              aes(x = F, y = SSB/1000), method = "lm", colour = "purple")+
-  geom_smooth(data = SSB_F_lag[SSB_F_lag$year > best_brk_years[3] & SSB_F_lag$year <= best_brk_years[4], ],
-              aes(x = F, y = SSB/1000), method = "lm", colour = "lightgreen")+
-  geom_smooth(data = SSB_F_lag[SSB_F_lag$year > best_brk_years[4], ], aes(x = F, y = SSB/1000),
-              method = "lm", colour = "indianred")+
-  labs(x = "", y = "")+
-  geom_text_repel(data = SSB_F_lag, aes(label = year), #1960
-                  point.padding = 0.2,nudge_y = 100, nudge_x = -0.05, size=3,col="gray30", segment.size =0.2 )+
-  geom_text_repel(data = SSB_F_lag[37, ], aes(label = year), #1991
-                  point.padding = 0.2, nudge_y = 0, nudge_x = 0.2, size=3,col="gray30", segment.size =0.2 )+
-  geom_text_repel(data = SSB_F_lag[53, ], aes(label = year), #2007
-                  point.padding = 0.2, nudge_y = 0,nudge_x= -0.2, size=3,col="gray30", segment.size =0.2 )+
-  geom_text_repel(data = SSB_F_lag[64, ], aes(label = year), #2021
-                  point.padding = 0.2, nudge_x = -0.1, size=3, col="gray30", segment.size =0.2 )+
-  xlim(0, 0.8)+
-  theme_test()+
-  theme(plot.tag.position = c(0.9, 0.9),
-        plot.background = element_blank(),
-        axis.text = element_text(size = 12))
-SSB_F_lag_breakpoint_hyst
 ```
 
 ### save plot
@@ -198,10 +148,10 @@ ggsave(filename = file.path("plots/", "hysteresis_full.png"),
 
 ```{r}
 ### Plot SBB over R
-plot_SRR_full <- ggplot(data = SSB_F_lag, aes(x = SSB/1000000, y = R/1000)) +
+plot_SRR_full <- ggplot(data = Herring_full, aes(x = SSB/1000000, y = R/1000)) +
   geom_point(aes(color = cut(year, 
-                            breaks = c(1950, 1960, 1971, 1986, 2000, 2025),
-                            labels = c("1950-1960", "1960-1971", "1971-1986", "1986-2000", "2000-2025"),
+                            breaks = c(1950, 1957, 1968, 1983, 1997, 2025),
+                            labels = c("1950-1957", "1957-1968", "1968-1983", "1983-1997", "1997-2025"),
                             include.lowest = TRUE))) +
   scale_color_manual(values = c("steelblue", "darkorange", "purple", "lightgreen", "indianred"),
                      name = "Time Period") +
@@ -212,9 +162,40 @@ plot_SRR_full
 
 ### Run Modelfiting with run_srr_analysis function
 results <- run_srr_analysis(
-  SSB_F_lag, ICES_data, 
+  Herring_full, ICES_data, 
   lag_recruit_col = "R", lag_SSB_col = "SSB",
   norm_recruit_col = "Recruitment", norm_ssb_col = "SSB")
 
 print(results$comparison)
+
+source("R/model_comp_functions.R")
+results_2 <- run_srr_analysis(
+    data_for_srr = ICES_data,
+   recruit_col = "Recruitment",
+   ssb_col = "SSB",
+   opt_brks_val = 4 # Example: assuming 1 breakpoint for strucchange
+ )
+
+ print(results_2$comparison_table)
+ print(results_2$glm_diagnostic_results$overdispersion)
+```
+
+## Plotting
+
+```{r}
+plot_SRR_models <- ggplot(ICES_data, aes(SSB/1000, Recruitment/1000000)) +
+  geom_point()+
+  geom_vline(aes(col = "seg. neg bi",xintercept = brpt_haddock_negbi/1000), linetype = 2)+
+  geom_line(aes(y = coef_haddock_negbi/1000000, col = "seg. neg bi"))+
+  geom_vline(aes(col = "segmented", xintercept = brpt_haddock/1000), linetype = 2)+
+  geom_line(aes(y = coef_haddock/1000000, col = "segmented"))+
+  geom_vline(aes(col = "segmented log", xintercept = exp(brpt_haddock_log)/1000), linetype = 2)+
+  geom_line(aes(y = exp(coef_haddock_log)/1000, col = "segmented log"))+
+  geom_line(data = ns_data, aes(ssb/1000,pR_ricker/1000000, col = "Ricker"), show.legend = TRUE)+ #Ricker
+  #geom_line(data=ns_data, aes(ssb/1000000,pR_beverton/1000000, col = "Beverton-Holt"), show.legend = TRUE)+ #BH doesn't work because of starting values
+  geom_line(data = ns_data, aes(ssb/1000, fitI/1000000, col = "Indipendence"), show.legend = T)+
+  geom_line(data = ns_data, aes(ssb/1000, fit_strucc/1000000, col = "strucchange"))+
+  labs(col = "Model")
+
+SRR_haddock_models
 ```

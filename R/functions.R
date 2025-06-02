@@ -294,9 +294,9 @@ plot_hysteresis <- function(data, break_years, component,
     geom_path(colour = "grey") +
     geom_hline(yintercept = msy_btrigger/1000000, linetype = "dashed", color = "gray30") +
     geom_vline(xintercept = fmsy, linetype = "dashed", color = "gray30") +
-    geom_label(x = fmsy, y = 3, label = expression("F"[MSY]), 
+    geom_label(x = fmsy, y = 0.5, label = expression("F"[MSY]), 
                color = "gray30", size = 3.5) +
-    geom_label(x = 0.8, y = msy_btrigger/1000000, label = expression("MSY B"[trigger]), 
+    geom_label(x = 1.2, y = msy_btrigger/1000000, label = expression("MSY B"[trigger]), 
                color = "gray30", size = 3.5, fontface = "bold") +
     geom_point(colour = hyst_phases) +
     labs(title = paste("Hysteresis in", component), x = "F", y = "SSB in millions") +
@@ -313,7 +313,7 @@ plot_hysteresis <- function(data, break_years, component,
   # Define nudge parameters for each break year position
   nudge_params <- list(
     list(nudge_y = 0, nudge_x = 0.2),
-    list(nudge_y = -0.2, nudge_x = 0.05),
+    list(nudge_y = -0.5, nudge_x = 0.2),
     list(nudge_y = 0, nudge_x = -0.2),
     list(nudge_y = 0, nudge_x = 0.2))
   

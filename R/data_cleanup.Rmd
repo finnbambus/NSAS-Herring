@@ -53,25 +53,29 @@ LAI_component <- read_csv("data raw/NSAS LAI Components 2025.csv") %>%
          LAI_perc. = LAI_perc. * 100)
 
 ## Read SSB_2025 .csv & and rename columns for continuity
-SSB_full <- read_csv("data raw/NSAS SSB 2025.csv") %>%
+Herring_full <- read_csv("data raw/NSAS SSB 2025.csv") %>%
   dplyr::select(-1) %>%
   rename(SSB = value, cv = CV, l_bnd = lbnd, u_bnd = ubnd)  
 
-  ### *(SSB = SSB in Tonnes, cv = coefficient of variation, l_bnd = lower limit of 95% CI & u_bnd = upper limit of 95% CI)
+### *(SSB = SSB in Tonnes, cv = coefficient of variation, l_bnd = lower limit of 95% CI & u_bnd = upper limit of 95% CI)
+
+## read ICES data & fill to lenght
+ICES_data <- read.table("data raw/NSAS ICES data 2024.txt", sep = ",", header = TRUE)
+ICES_data[nrow(ICES_data) + 1, ] <- NA
+
+### Add F & R from to Herring_full
+Herring_full$F <- ICES_data$F
+Herring_full$R <- ICES_data$Recruitment
+  
 
 ## Split SSB Data by components & 95% bounds by component percentage and attach it and LAI percent data to SSB
-SSB_LAI <- SSB_full %>%
+Herring_LAI <- Herring_full %>%
   left_join(LAI_component, by = "year") %>%
   mutate(SSB_component = SSB * (LAI_perc. / 100),
          l_bnd_component = l_bnd * (LAI_perc. / 100),
          u_bnd_component = u_bnd * (LAI_perc. / 100)) %>%
-  dplyr::select(year, component, LAI_perc., SSB_component, l_bnd_component, u_bnd_component) %>%
+  dplyr::select(year, component, LAI_perc., SSB_component, l_bnd_component, u_bnd_component, F, R) %>%
   drop_na()
-```
-
-## ICES data import
-```{r}
-ICES_data <- read.table("data raw/NSAS ICES data 2024.txt", sep = ",", header = TRUE)
 ```
 
 
@@ -130,7 +134,7 @@ plot_LAI_percent <- ggplot(LAI_component, aes(x = as.factor(year),
 print(plot_LAI_percent)
 
 ## Plot timeseries of SSB including confindence bounds
-plot_SSB_full <- ggplot(SSB_full, aes(x = year)) +
+plot_Herring_full <- ggplot(Herring_full, aes(x = year)) +
   geom_ribbon(aes(ymin = (l_bnd / 1000000), 
                   ymax = (u_bnd / 1000000)), fill = "skyblue", alpha = 0.5) +
   geom_line(aes(y = (SSB / 1000000)), color = "navyblue", linewidth = 1) +
@@ -141,10 +145,10 @@ plot_SSB_full <- ggplot(SSB_full, aes(x = year)) +
   theme(plot.title = element_text(hjust = 0.5),
         axis.title.x = element_text(margin = margin(t = 10)),
         axis.title.y = element_text(margin = margin(r = 10)))
-print(plot_SSB_full)
+print(plot_Herring_full)
 
 ## Visualise subset SSB data by component
-plot_SSB_component <- ggplot(SSB_LAI, aes(x = year, y = (SSB_component / 1000000))) +
+plot_SSB_component <- ggplot(Herring_LAI, aes(x = year, y = (SSB_component / 1000000))) +
   geom_ribbon(aes(ymin = (l_bnd_component / 1000000), ymax = (u_bnd_component / 1000000)), fill = "skyblue", alpha = 0.5) +
   geom_line(color = "navyblue", linewidth = 0.8) +
   facet_wrap(~ component, ncol = 2, scales = "fixed") +
@@ -157,7 +161,7 @@ plot_SSB_component <- ggplot(SSB_LAI, aes(x = year, y = (SSB_component / 1000000
         axis.title.y = element_text(margin = margin(r = 10)))
 print(plot_SSB_component)
 
-plot_SSB_component_b <- ggplot(SSB_LAI, aes(x = year, y = SSB_component / 1e6, color = component, fill = component)) +
+plot_SSB_component_b <- ggplot(Herring_LAI, aes(x = year, y = SSB_component / 1e6, color = component, fill = component)) +
   geom_ribbon(aes(ymin = l_bnd_component / 1e6,
                   ymax = u_bnd_component / 1e6), alpha = 0.3, color = NA) +
   geom_line(linewidth = 0.8) +
@@ -195,11 +199,8 @@ print(plot_env_data_Downs)
 ### LAI data
 save(LAI_full, file = file.path("data/", "LAI_full.Rdata"))
 save(LAI_aggregated, file = file.path("data/", "LAI_aggregated.Rdata"))
-save(SSB_full, file = file.path("data/", "SSB_full.Rdata"))
-save(SSB_LAI, file = file.path("data/", "SSB_LAI.Rdata"))
-
-### ICES data
-save(ICES_data, file = file.path("data/", "ICES_data.Rdata"))
+save(Herring_full, file = file.path("data/", "Herring_full.Rdata"))
+save(Herring_LAI, file = file.path("data/", "Herring_LAI.Rdata"))
 
 ### Environmental data
 save(env_data_full, file = file.path("data/", "env_data_full.Rdata"))
@@ -238,7 +239,7 @@ ggsave(filename = file.path("plots/", "SSB_component_b.png"),
        dpi = 300)
 
 ggsave(filename = file.path("plots/", "SSB.png"),
-       plot = plot_SSB_full,
+       plot = plot_Herring_full,
        bg = "white",
        width = 15,
        height = 10,
