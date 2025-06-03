@@ -16,12 +16,15 @@ setwd("~/R Studio/NSAS Herring/NSAS-Herring")
 
 library(bcp)
 library(changepoint)
-library(tidyverse)
 library(ggrepel)
 library(readxl)
 library(ggplot2)
-library(segmented)
+library(tidyverse)
+library(tidyr)
 library(FSA)
+library(strucchange)
+library(MASS)
+library(hydroGOF)
 ```
 
 ## Import data
@@ -104,10 +107,12 @@ summary(bpts)
 bpts_sum <- summary(bpts)
 opt_brks <- opt_bpts(bpts_sum$RSS["BIC",])
 opt_brks #### 4
-bpts2 <- strucchange:: breakpoints(bpts, breaks = opt_brks)
 best_brk <- Herring_full$F[bpts2$breakpoints]
 best_brk
 ####  0.28 1.09 0.28 0.189
+best_brk_years <- Herring_full$year[bpts2$breakpoints]
+best_brk_years
+#### 1957, 1968, 1983, 1997
 
 par(mfrow = c(1,1))
 ci_mod <- confint(bpts, breaks = opt_brks)
@@ -117,10 +122,6 @@ for (i in 1: opt_brks) {
   abline(v = Herring_full$F[ci_mod$confint[i,1]], col = "red", lty = 3)
   abline(v = Herring_full$F[ci_mod$confint[i,3]], col = "red", lty = 3)
 }
-### Get corresponding years:
-best_brk_years <- Herring_full$year[bpts2$breakpoints]
-best_brk_years
-#### 1957, 1968, 1983, 1997
 ```
 
 ## Plotting
@@ -147,55 +148,48 @@ ggsave(filename = file.path("plots/", "hysteresis_full.png"),
 ## Analysis
 
 ```{r}
-### Plot SBB over R
-plot_SRR_full <- ggplot(data = Herring_full, aes(x = SSB/1000000, y = R/1000)) +
-  geom_point(aes(color = cut(year, 
-                            breaks = c(1950, 1957, 1968, 1983, 1997, 2025),
-                            labels = c("1950-1957", "1957-1968", "1968-1983", "1983-1997", "1997-2025"),
-                            include.lowest = TRUE))) +
-  scale_color_manual(values = c("steelblue", "darkorange", "purple", "lightgreen", "indianred"),
-                     name = "Time Period") +
-  labs(x = "SSB in million t", y = "R in billions", title = "SRR Full Stock") +
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5))
-plot_SRR_full
-
-### Run Modelfiting with run_srr_analysis function
-results <- run_srr_analysis(
-  Herring_full, ICES_data, 
-  lag_recruit_col = "R", lag_SSB_col = "SSB",
-  norm_recruit_col = "Recruitment", norm_ssb_col = "SSB")
-
-print(results$comparison)
-
+### Run model comparison from model_comp_functions.R 
 source("R/model_comp_functions.R")
-results_2 <- run_srr_analysis(
-    data_for_srr = ICES_data,
-   recruit_col = "Recruitment",
-   ssb_col = "SSB",
-   opt_brks_val = 4 # Example: assuming 1 breakpoint for strucchange
- )
 
- print(results_2$comparison_table)
- print(results_2$glm_diagnostic_results$overdispersion)
+SSR_analysis <- run_srr_analysis(
+    data_for_srr = Herring_full[-(79:78),],
+   recruit_col = "R",
+   ssb_col = "SSB",
+   opt_brks_val = 4)
+
+print(SSR_analysis$comparison_table)
+
+#### strucchange model shows lowest RMSE
+
+#### Strucchange breakpoint analysis
+bpts_SRR <- strucchange :: breakpoints(R ~ SSB, data = Herring_full)
+bpts_SRR_sum <- summary(bpts_SRR)
+opt_brks_SRR <- opt_bpts(bpts_SRR_sum$RSS["BIC",])
+opt_brks_SRR #2
+bpts2_SRR <-strucchange :: breakpoints(bpts_SRR, breaks = opt_brks_SRR)
+
+best_brk_SRR <- Herring_full$SSB[bpts2_SRR$breakpoints]
+best_brk_SRR
+#### 264793.8,  2391903.7
+best_brk_years_SRR <- Herring_full$year[bpts2_SRR$breakpoints]
+best_brk_years_SRR
+#### 1981,      2002
 ```
 
 ## Plotting
 
 ```{r}
-plot_SRR_models <- ggplot(ICES_data, aes(SSB/1000, Recruitment/1000000)) +
-  geom_point()+
-  geom_vline(aes(col = "seg. neg bi",xintercept = brpt_haddock_negbi/1000), linetype = 2)+
-  geom_line(aes(y = coef_haddock_negbi/1000000, col = "seg. neg bi"))+
-  geom_vline(aes(col = "segmented", xintercept = brpt_haddock/1000), linetype = 2)+
-  geom_line(aes(y = coef_haddock/1000000, col = "segmented"))+
-  geom_vline(aes(col = "segmented log", xintercept = exp(brpt_haddock_log)/1000), linetype = 2)+
-  geom_line(aes(y = exp(coef_haddock_log)/1000, col = "segmented log"))+
-  geom_line(data = ns_data, aes(ssb/1000,pR_ricker/1000000, col = "Ricker"), show.legend = TRUE)+ #Ricker
-  #geom_line(data=ns_data, aes(ssb/1000000,pR_beverton/1000000, col = "Beverton-Holt"), show.legend = TRUE)+ #BH doesn't work because of starting values
-  geom_line(data = ns_data, aes(ssb/1000, fitI/1000000, col = "Indipendence"), show.legend = T)+
-  geom_line(data = ns_data, aes(ssb/1000, fit_strucc/1000000, col = "strucchange"))+
-  labs(col = "Model")
+plot_SRR_full <- plot_SRR(Herring_full, best_brk_years_SRR, "Full Stock", "strucchange")
+plot_SRR_full
+```
 
-SRR_haddock_models
+#### save plot
+
+```{r}
+ggsave(filename = file.path("plots/", "SRR_full.png"),
+       plot = plot_SRR_full,
+       bg = "white",
+       width = 10,
+       height = 10,
+       dpi = 300)
 ```

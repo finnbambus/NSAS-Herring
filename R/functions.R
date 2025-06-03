@@ -630,3 +630,74 @@ run_srr_analysis <- function(SSB_lag_data, SSB_data,
     comparison = comparison))}
 
 
+#--------------------------------------------------------------------------------------
+## Plot SRR
+#--------------------------------------------------------------------------------------
+
+plot_SRR <- function(data, break_years, title_stock, used_model,
+                     Blim = 828874,
+                     colors = c("steelblue", "darkorange", "purple", "lightgreen", "indianred", "darkred", "darkblue")) {
+  
+  # Determine number of break years and resulting phases
+  n_breaks <- length(break_years)
+  n_phases <- n_breaks + 1
+  
+  data$phase <- 1
+  for (i in 1:n_breaks) {
+    data$phase[data$year > break_years[i]] <- i + 1}
+  
+  # Add initial plot
+  p <- ggplot(data = data, aes(x = SSB / 1000000, y = R / 1000000)) +
+    geom_path(colour = "grey") +
+    geom_point(aes(color = factor(phase))) +
+    scale_color_manual(values = colors[1:n_phases]) +
+    geom_vline(xintercept = Blim / 1000000, linetype = "dashed", color = "gray30") +
+    geom_label(x = Blim / 1000000, y = 7, label = expression("B"[lim]),
+               color = "gray30", size = 3.5, fontface = "bold") +
+    labs(title = paste("Stock-Recruitment Relationship for", title_stock), subtitle = used_model,
+         x = "SSB in millions", y = "R in billions") +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"), 
+          plot.subtitle = element_text(hjust = 0.5, size = 12, face = "italic"),
+          legend.position = "none",
+          axis.text = element_text(size = 12))
+  
+  # Add geom_smooth for each phase
+  for (i in 1:n_phases) {
+    phase_data <- data %>% dplyr::filter(phase == i)
+    if (nrow(phase_data) > 0) {
+      p <- p + geom_smooth(data = phase_data,
+                           mapping = aes(x = SSB / 1000000, y = R / 1000000),
+                           col = colors[i], method = "lm")}}
+  
+  # Define nudge parameters for text labels to avoid overlap
+  nudge_params <- list(
+    list(nudge_y = -5, nudge_x = -0.2), # first year
+    list(nudge_y = 0, nudge_x = -0.5),  # breakpoint
+    list(nudge_y = -5, nudge_x = -0.2), # last year
+    list(nudge_y = 5, nudge_x = -0.2),  # more breakpoints
+    list(nudge_y = -0, nudge_x = -0.2))
+  
+  # Add text labels for the first and last years
+  p <- p +  geom_text_repel(data = data[1, ], aes(label = year),
+                           point.padding = 0.2, nudge_y = nudge_params[[1]]$nudge_y,
+                           nudge_x = nudge_params[[1]]$nudge_x,
+                           size = 3, col = "gray30", segment.size = 0.2) +
+            geom_text_repel(data = data[nrow(data)-1, ], aes(label = year),
+                            point.padding = 0.2, nudge_y = nudge_params[[3]]$nudge_y,
+                            nudge_x = nudge_params[[3]]$nudge_x,
+                            size = 3, col = "gray30", segment.size = 0.2)
+  
+  # Add text labels for each breakpoint year
+  for (i in 1:n_breaks) {
+    brk_year <- break_years[i]
+    break_year_data <- data %>% dplyr::filter(year == brk_year)
+    if (nrow(break_year_data) > 0) {
+      nudge_idx <- (i %% length(nudge_params)) + 1
+      p <- p + geom_text_repel(data = break_year_data, aes(label = year),
+                               point.padding = 0.2,
+                               nudge_y = nudge_params[[nudge_idx]]$nudge_y,
+                               nudge_x = nudge_params[[nudge_idx]]$nudge_x,
+                               size = 3, col = "gray30", segment.size = 0.2)}}
+
+  return(p)}

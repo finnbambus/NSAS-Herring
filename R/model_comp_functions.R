@@ -1,228 +1,472 @@
+# Helper Functions ----
 
-herring <- read.csv("SA_herring_2021.csv",
-                    sep = ",")
-herring <- arrange(herring, SSB)
-#herring <- arrange(herring, SSB)
-color_regimes_herring <- NULL
-color_regimes_herring[herring$Year %in% c(1947:1966)] <- "steelblue3"
-color_regimes_herring[herring$Year %in% c(1966:1983)] <- "darkorange"
-color_regimes_herring[herring$Year %in% c(1983:2021)] <- "purple"
-herring$color_regimes_herring <- color_regimes_herring
+# A simple is_empty function
+is_empty <- function(x) {
+  length(x) == 0 || is.null(x) || all(is.na(x))}
 
-
-
-RR_herring <- ggplot(data = herring)+
-  geom_point((aes(x = SSB/1000, y = R_0/1000000)),col = color_regimes_herring)+
-  theme_test()+
-  labs(title = "Herring")
-SRR_herring
-
-
-ns_data <- herring
-ns_data$R <- ns_data$R_0
-ns_data$ssb <- ns_data$SSB
-
-#1.1. Indipendence Model ----
-m1 <- lm(ns_data$R~ns_data$ssb)
-summary(m1)
-fitI <- fitted(m1)
-#high overdispersion
-
-#1.2. Beverton Holt ----
-svR <- srStarts(R ~ ssb, data=ns_data, type="BevertonHolt")
-svR
-###stock-recruitement function (NB, the function is log based!)
-bh <- srFuns("BevertonHolt")
-srR_beverton <- nls(log(R)~log(bh(ssb,a,b)), data=ns_data, start=svR)
-
-
-##results tell you significance of parameters and residual standard error
-#resisual standard error is the square root of the residual sum of squares
-#divided by degrees of freedom
-summary(srR_beverton)
-cbind(estimates=coef(srR_beverton), confint(srR_beverton))
-### make predictions to then plot!
-pR_beverton <- bh(ns_data$ssb, a=coef(srR_beverton))
-ns_data$pR_beverton <- pR_beverton
-###quasi-r2 value, if low model does not fit well!
-cor(bh(ns_data$ssb, a=coef(srR_beverton)), ns_data$R)^2
-
-#1.3. Ricker ----
-svR <- srStarts(R ~ ssb, data=ns_data, type="Ricker")
-svR
-##fit the Ricker function to data
-rckr <- srFuns("Ricker")
-srR_ricker <- nls(log(R)~log(rckr(ssb,a,b)), data=ns_data, start=svR)
-#for a and b
-cbind(estimates=coef(srR_ricker),confint(srR_ricker))
-###prediction
-#plot
-pR_ricker <- rckr(ns_data$ssb, a=coef(srR_ricker))
-ns_data$pR_ricker <- pR_ricker
-
-#1.4. Segmented ----
-mean(herring$SSB, na.rm = T) #1930650
-seg_herring <- segmented::segmented(lm(R_0 ~SSB, data = herring), seg.Z =  ~SSB, psi = mean(herring$SSB, na.rm = T))
-summary(seg_herring)
-summary(seg_herring)$psi
-coef_herring <-c(seg_herring$fitted.values)
-brpt_herring <- seg_herring$psi[2]
-brpt_ste_herring <- seg_herring$psi[3]
-
-#1.5. Segmented log ----
-herring$r_log <- log(herring$R_0)
-herring$SSB_lag_log <- log(herring$SSB)
-#View(herring)
-
-mean(herring$SSB_lag_log, na.rm = T) #14.01547
-seg_herring_log <- segmented::segmented(lm(r_log ~ SSB_lag_log, data = herring), seg.Z =  ~ SSB_lag_log, psi = mean(herring$SSB_lag_log, na.rm = T))
-summary(seg_herring_log)
-summary(seg_herring_log)$psi
-
-coef_herring_log <-c(seg_herring_log$fitted.values)
-brpt_herring_log <- seg_herring_log$psi[2]
-brpt_ste_herring_log <- seg_herring_log$psi[3]
-
-#1.6. Segmented with best performing GLM ----
-#1.6.1. glm with gaussian
-herring_gaus <- glm(R_0 ~ SSB, data = herring, family = gaussian)
-summary(herring_gaus)
-1.6091e+16/73 #2.204247e+14, clear overdispersion
-par(mfrow = c(2,2))
-plot(herring_gaus)
-# bad model fit, dont necessary to visualize
-
-#1.6.2. glm with poisson
-herring_pois <- glm(R_0 ~ SSB, data = herring, family = poisson)
-summary(herring_pois)
-569510983/73 #7801520, clear overdispersion
-
-plot(herring_pois)
-#better, but overdispersed
-
-#1.6.3. glm with quasipoisson
-herring_qpois <- glm(R_0 ~ SSB, data = herring, family = quasipoisson)
-summary(herring_qpois)
-
-plot(herring_qpois)
-569510983/73#569510983
-#not better modelfit, but no overdispersion
-
-#1.6.4. glm with negative binomial
-
-herring_negbi <- glm.nb(R_0 ~ SSB, data = herring)
-summary(herring_negbi)
-78.842/73 #1.080027 -> no over or underdispersion
-
-plot(herring_negbi)
-#slightly better than the quasipoisson model -> use negative binomial for the segmented analysis
-
-mean(herring$SSB, na.rm = T)
-seg_herring_negbi <- segmented::segmented(glm.nb(R_0 ~SSB, data = herring), seg.Z =  ~SSB, psi = mean(herring$SSB, na.rm = T))
-summary(seg_herring_negbi)
-summary(seg_herring_negbi)$psi
-
-coef_herring_negbi <-c(seg_herring_negbi$fitted.values)
-brpt_herring_negbi <- seg_herring_negbi$psi[2]
-brpt_ste_herring_negbi <- seg_herring_negbi$psi[3]
-
-#1.7. Strucchange ----
-bpts <- strucchange :: breakpoints(R_0 ~ SSB, data = herring)
-
-
-plot(bpts)
-summary(bpts)
-
-
-opt_bpts <- function(x) {
-  #x = bpts_sum$RSS["BIC",]
-  n <- length(x)
-  lowest <- vector("logical", length = n-1)
-  lowest[1] <- FALSE
-  for (i in 2:n) {
-    lowest[i] <- x[i] < x[i-1] & x[i] < x[i+1]
-  }
-  out <- as.integer(names(x)[lowest])
-  return(out)
-}
-bpts_sum <- summary(bpts)
-opt_brks <- opt_bpts(bpts_sum$RSS["BIC",])
-opt_brks #1
-bpts2 <-strucchange :: breakpoints(bpts, breaks = opt_brks)
-best_brk <- herring$SSB[bpts2$breakpoints]
-
-best_brk #1202006
-
-par(mfrow = c(1,1))
-ci_mod <- confint(bpts, breaks = opt_brks)
-plot(R_0 ~ SSB, data = herring, type = "p")
-for (i in 1: opt_brks) {
-  abline(v = haddock$SSB[ci_mod$confint[i,2]], col = "blue")
-  abline(v = haddock$SSB[ci_mod$confint[i,1]], col = "red", lty = 3)
-  abline(v = haddock$SSB[ci_mod$confint[i,3]], col = "red", lty = 3)
-}
-
-
-## fit null hypothesis model
-fm0 <- lm(R_0 ~ SSB, data = herring)
-# fit model with 1 breakpoint but formula different then in previous time series:
-
-
-
-######cannot find "best_brk"
-strucc_herring <- lm(R_0 ~ SSB*(SSB < best_brk) + SSB*(SSB > best_brk), data = herring)
-fm1_coef <- coef(strucc_herring)
-
-fit_strucc <- fitted(strucc_herring)
-
-fit1 <- (fm1_coef[1] + fm1_coef[3]) + (fm1_coef[2] + fm1_coef[5])*herring$SSB[herring$SSB <= best_brk]
-fit2 <- (fm1_coef[1] + fm1_coef[4]) + (fm1_coef[2])*herring$SSB[herring$SSB>= best_brk]
-
-# add to previous plot
-lines(herring$SSB, fitted(fm0), col = 3)
-lines(herring$SSB[herring$SSB <= best_brk], fit1, col = "orange")
-lines(herring$SSB[herring$SSB >= best_brk], fit2, col = "orange")
-
-#1.8. Visualize and compare with RMSE ----
-SRR_herring_models <- SRR_herring +
-  geom_vline(aes(col = "seg. neg bi",xintercept = brpt_herring_negbi/1000), linetype = 2)+
-  #geom_segment(y = 800, yend = 800, x = brpt_herring_negbi/1000000-brpt_ste_herring_negbi/1000000,
-  #            xend = brpt_herring_negbi/1000000+brpt_ste_herring_negbi/1000000, col = "red")+
-  geom_line(aes(y = coef_herring_negbi/10000000, col = "seg. neg bi"))+
-  geom_vline(aes(col = "segmented", xintercept = brpt_herring/1000), linetype = 2)+
-  #geom_segment(y = 20, yend = 20, x = brpt_herring/1000000-brpt_ste_herring/1000000,
-  #            xend = brpt_herring/1000000+brpt_ste_herring/1000000, col = "red")+
-  geom_line(aes(y = coef_herring/1000000, col = "segmented"))+
-  geom_vline(aes(col = "segmented log", xintercept = exp(brpt_herring_log)/1000), linetype = 2)+
-  #geom_segment(y = 0.5, yend = 0.5, x = exp(brpt_herring_log)/1000000-exp(brpt_ste_herring_log)/1000000,
-  #            xend = exp(brpt_herring_log)/1000000+exp(brpt_ste_herring_log)/1000000, col = "red")+
-  geom_line(aes(y = exp(coef_herring_log)/1000000, col = "segmented log"))+
-  geom_line(data = ns_data, aes(ssb/1000,pR_ricker/1000000, col = "Ricker"), show.legend = TRUE)+ #Ricker
-  geom_line(data=ns_data, aes(ssb/1000,pR_beverton/1000000, col = "Beverton-Holt"), show.legend = TRUE)+ #BH
-  geom_line(data = ns_data, aes(ssb/1000, fitI/1000000, col = "Indipendence"), show.legend = T)+
-  #geom_line(data = herring[herring$SSB_lag <= best_brk[1], ], aes(x = SSB_lag/1000, y = fit1/1000, col = "strucchange"), show.legend = TRUE)+
-  #geom_line(data = herring[herring$SSB_lag > best_brk[1] & herring$SSB_lag<= best_brk[2], ], aes(x = SSB_lag/1000, y = fit2/100000, col = "strucchange"), show.legend = TRUE)+
-  #geom_line(data = herring[herring$SSB_lag > best_brk[2], ], aes(SSB_lag/1000, fit3/1000, col = "strucchange"), show.legend = TRUE)+
-  #geom_vline(aes(xintercept = best_brk[1]/1000, col = "strucchange"), linetype = 2)+
-  #geom_vline(aes(xintercept = best_brk[2]/1000, col = "strucchange"), linetype = 2)+
-  labs(col = "Model")
-
-SRR_herring_models
-#Note: must abline strucchange in different way (if it works)
-
+# Calculate Root Mean Squared Error (RMSE)
 rmse <- function(sim, obs) {
-  sqrt(mean((obs-sim)^2))
-}
+  sqrt(mean((obs - sim)^2, na.rm = TRUE))}
 
-comparison <- NULL
-comparison <- AIC(m1, srR_beverton, srR_ricker, seg_herring, seg_herring_log, seg_herring_negbi
-                  , strucc_herring
-)
-comparison[1, 3] <- rmse(sim = fitI, obs = herring$R_0)
-comparison[2, 3] <- rmse(sim = ns_data$pR_beverton, obs = herring$R_0)
-comparison[3, 3] <- rmse(sim = ns_data$pR_ricker, obs = herring$R_0)
-comparison[4, 3] <- rmse(sim = seg_herring$fitted.values, obs = herring$R_0)
-comparison[5, 3] <- rmse(sim = seg_herring_log$fitted.values, obs = herring$R_0)
-comparison[6, 3] <- rmse(sim = seg_herring_negbi$fitted.values, obs = herring$R_0)
-comparison[7, 3] <- rmse(sim = c(fit1, fit2, fit3), obs = herring$R_0)
-comparison
+# Check if required columns exist in a data frame
+check_data_columns <- function(data, required_cols) {
+  missing_cols <- setdiff(required_cols, names(data))
+  if (length(missing_cols) > 0) {
+    stop(paste("Missing columns in data:", paste(missing_cols, collapse = ", ")))}}
+
+# Fit Generalized Linear Models (GLMs) with different families
+#
+# This function fits Gaussian, Poisson, Quasipoisson, and Negative Binomial GLMs
+# and calculates their overdispersion parameters.
+#
+# @param data A data frame containing recruitment and SSB data.
+# @param recruit_col The name of the recruitment column (character string).
+# @param ssb_col The name of the SSB column (character string).
+# @return A list containing fitted GLM models and their overdispersion values.
+fit_glm_models <- function(data, recruit_col = "R", ssb_col = "SSB") {
+  check_data_columns(data, c(recruit_col, ssb_col))
+  
+  formula_str <- paste(recruit_col, "~", ssb_col)
+  formula_obj <- as.formula(formula_str)
+  
+  models <- list()
+  overdispersion <- list()
+  
+  # Gaussian GLM
+  tryCatch({
+    models$gaussian <- glm(formula_obj, data = data, family = gaussian)
+    overdispersion$gaussian <- deviance(models$gaussian) / df.residual(models$gaussian)
+  }, error = function(e) {
+    warning(paste("Gaussian GLM failed:", e$message))
+    models$gaussian <- NULL
+    overdispersion$gaussian <- NA})
+  
+  # Poisson GLM
+  tryCatch({
+    models$poisson <- glm(formula_obj, data = data, family = poisson)
+    overdispersion$poisson <- deviance(models$poisson) / df.residual(models$poisson)
+  }, error = function(e) {
+    warning(paste("Poisson GLM failed:", e$message))
+    models$poisson <- NULL
+    overdispersion$poisson <- NA})
+  
+  # Quasipoisson GLM
+  tryCatch({
+    models$quasipoisson <- glm(formula_obj, data = data, family = quasipoisson)
+    overdispersion$quasipoisson <- deviance(models$quasipoisson) / df.residual(models$quasipoisson)
+  }, error = function(e) {
+    warning(paste("Quasipoisson GLM failed:", e$message))
+    models$quasipoisson <- NULL
+    overdispersion$quasipoisson <- NA})
+  
+  # Negative Binomial GLM
+  tryCatch({
+    models$negbinom <- MASS::glm.nb(formula_obj, data = data)
+    overdispersion$negbinom <- deviance(models$negbinom) / df.residual(models$negbinom)
+  }, error = function(e) {
+    warning(paste("Negative Binomial GLM failed:", e$message))
+    models$negbinom <- NULL
+    overdispersion$negbinom <- NA})
+  
+  list(models = models, overdispersion = overdispersion)}
+
+# Main Modeling Functions ----
+
+# Fit an independence (linear) model
+#
+# @param data A data frame.
+# @param recruit_col The name of the recruitment column.
+# @param ssb_col The name of the SSB column.
+# @return A list containing the fitted linear model and its fitted values.
+fit_independence_model <- function(data, recruit_col = "R", ssb_col = "SSB") {
+  check_data_columns(data, c(recruit_col, ssb_col))
+  
+  formula_str <- paste(recruit_col, "~", ssb_col)
+  model <- lm(as.formula(formula_str), data = data)
+  
+  list(model = model, fitted = fitted(model))}
+
+# Fit a Beverton-Holt stock-recruitment model
+#
+# @param data A data frame.
+# @param recruit_col The name of the recruitment column.
+# @param ssb_col The name of the SSB column.
+# @return A list containing the fitted nls model, its fitted values, and R-squared.
+fit_beverton_holt <- function(data, recruit_col = "R", ssb_col = "SSB") {
+  check_data_columns(data, c(recruit_col, ssb_col))
+  
+  formula_str_srStarts <- paste(recruit_col, "~", ssb_col)
+  formula_obj_srStarts <- as.formula(formula_str_srStarts)
+  
+  fitted_vals <- rep(NA, nrow(data)) # Initialize with NA
+  r2 <- NA # Initialize r2
+  
+  tryCatch({
+    # Suppress warnings/messages from nls convergence issues
+    suppressWarnings(suppressMessages({
+      sv <- FSA::srStarts(formula_obj_srStarts, data = data, type = "BevertonHolt")
+      bh <- FSA::srFuns("BevertonHolt")
+      
+      log_formula_str <- paste("log(", recruit_col, ") ~ log(bh(", ssb_col, ", a, b))")
+      model <- nls(as.formula(log_formula_str), data = data, start = sv)
+      
+      fitted_vals <- bh(data[[ssb_col]], a = coef(model))
+      r2 <- cor(fitted_vals, data[[recruit_col]], use = "pairwise.complete.obs")^2}))
+    
+    list(model = model, fitted = fitted_vals, r2 = r2)
+  }, error = function(e) {
+    warning(paste("Beverton-Holt model failed:", e$message))
+    list(model = NULL, fitted = fitted_vals, r2 = r2)})}
+
+# Fit a Ricker stock-recruitment model
+#
+# @param data A data frame.
+# @param recruit_col The name of the recruitment column.
+# @param ssb_col The name of the SSB column.
+# @return A list containing the fitted nls model and its fitted values.
+fit_ricker <- function(data, recruit_col = "R", ssb_col = "SSB") {
+  check_data_columns(data, c(recruit_col, ssb_col))
+  
+  formula_str_srStarts <- paste(recruit_col, "~", ssb_col)
+  formula_obj_srStarts <- as.formula(formula_str_srStarts)
+  
+  fitted_vals <- rep(NA, nrow(data)) # Initialize with NA
+  
+  tryCatch({
+    # Suppress warnings/messages from nls convergence issues
+    suppressWarnings(suppressMessages({
+      sv <- FSA::srStarts(formula_obj_srStarts, data = data, type = "Ricker")
+      rckr <- FSA::srFuns("Ricker")
+      
+      log_formula_str <- paste("log(", recruit_col, ") ~ log(rckr(", ssb_col, ", a, b))")
+      model <- nls(as.formula(log_formula_str), data = data, start = sv)
+      
+      fitted_vals <- rckr(data[[ssb_col]], a = coef(model))}))
+    
+    list(model = model, fitted = fitted_vals)
+  }, error = function(e) {
+    warning(paste("Ricker model failed:", e$message))
+    list(model = NULL, fitted = fitted_vals)})}
+
+# Fit segmented regression models (linear, log-transformed, and Negative Binomial)
+#
+# @param data A data frame.
+# @param recruit_col The name of the recruitment column.
+# @param ssb_col The name of the SSB column.
+# @return A list containing fitted segmented models, their fitted values, and breakpoints.
+fit_segmented_models <- function(data, recruit_col = "R", ssb_col = "SSB") {
+  check_data_columns(data, c(recruit_col, ssb_col))
+  
+  mean_ssb <- mean(data[[ssb_col]], na.rm = TRUE)
+  # Create log-transformed columns for internal use within this function
+  data_log <- data %>%
+    dplyr::mutate(
+      R_log = log(.[[recruit_col]]),
+      ssb_log = log(.[[ssb_col]]))
+  
+  mean_ssb_log <- mean(data_log$ssb_log, na.rm = TRUE)
+  
+  results <- list()
+  
+  # Define common formulas
+  formula_str <- paste(recruit_col, "~", ssb_col)
+  seg_formula_str <- paste("~", ssb_col)
+  
+  # Regular segmented (lm)
+  tryCatch({
+    base_model <- lm(as.formula(formula_str), data = data)
+    seg_regular <- segmented::segmented(
+      base_model,
+      seg.Z = as.formula(seg_formula_str),
+      psi = mean_ssb)
+    
+    results$regular <- list(
+      model = seg_regular,
+      fitted = fitted(seg_regular),
+      breakpoint = seg_regular$psi[2],
+      breakpoint_se = seg_regular$psi[3])
+    
+  }, error = function(e) {
+    warning(paste("Regular segmented model failed:", e$message))
+    results$regular <- list(model = NULL, fitted = NULL, breakpoint = NULL, breakpoint_se = NULL)})
+  
+  # Log-transformed segmented (lm on log-transformed data)
+  tryCatch({
+    base_model_log <- lm(R_log ~ ssb_log, data = data_log)
+    seg_log <- segmented::segmented(
+      base_model_log,
+      seg.Z = ~ssb_log,
+      psi = mean_ssb_log)
+    
+    results$log <- list(
+      model = seg_log,
+      fitted = fitted(seg_log),
+      breakpoint = seg_log$psi[2],
+      breakpoint_se = seg_log$psi[3])
+    
+  }, error = function(e) {
+    warning(paste("Log segmented model failed:", e$message))
+    results$log <- list(model = NULL, fitted = NULL, breakpoint = NULL, breakpoint_se = NULL)})
+  
+  # Segmented with Negative Binomial GLM (primary attempt)
+  # This section is the focus of the fix for the "unused argument" error
+  tryCatch({
+    # Fit glm.nb separately first
+    base_model_negbi_fit <- MASS::glm.nb(as.formula(formula_str), data = data)
+    
+    # Attempt to simplify the call object before passing to segmented
+    # This is a common workaround for issues where functions try to re-evaluate the call
+    # and get confused by complex arguments like the family list from glm.nb.
+    # We remove the family argument from the call, as segmented should infer it
+    # or handle it differently.
+    simplified_call <- base_model_negbi_fit$call
+    simplified_call$family <- NULL # Remove the problematic family argument from the call
+    
+    # Create a new glm.nb object with the simplified call
+    # This might not be strictly necessary if segmented doesnt re-evaluate the call
+    # but rather uses the family slot directly. However, the error suggests re-evaluation.
+    base_model_negbi_simplified <- base_model_negbi_fit
+    base_model_negbi_simplified$call <- simplified_call
+    
+    
+    seg_negbi <- segmented::segmented(
+      obj = base_model_negbi_simplified, # Pass the potentially simplified object
+      seg.Z = as.formula(seg_formula_str),
+      psi = mean_ssb)
+    
+    results$negbinom <- list(
+      model = seg_negbi,
+      fitted = fitted(seg_negbi),
+      breakpoint = seg_negbi$psi[2],
+      breakpoint_se = seg_negbi$psi[3],
+      note = "Base model: Negative Binomial GLM")
+    
+  }, error = function(e) {
+    warning(paste("Negative Binomial segmented model failed, attempting Quasipoisson fallback:", e$message))
+    # Fallback to Quasipoisson GLM for segmented if Negative Binomial fails
+    tryCatch({
+      base_model_qpois <- glm(as.formula(formula_str), data = data, family = quasipoisson)
+      seg_qpois <- segmented::segmented(
+        base_model_qpois,
+        seg.Z = as.formula(seg_formula_str),
+        psi = mean_ssb)
+      
+      results$negbinom_fallback <- list( # Use a different key for fallback
+        model = seg_qpois,
+        fitted = fitted(seg_qpois),
+        breakpoint = seg_qpois$psi[2],
+        breakpoint_se = seg_qpois$psi[3],
+        note = "Base model: Quasipoisson GLM (Negative Binomial fallback)")
+    }, error = function(e2) {
+      warning(paste("Quasipoisson segmented fallback also failed:", e2$message))
+      results$negbinom_fallback <- list(model = NULL, fitted = NULL, breakpoint = NULL, breakpoint_se = NULL)})})
+  
+  return(results)}
+
+# Fit a structural change model
+#
+# This function uses `strucchange::breakpoints` to identify and fit a model
+# with a specified number of structural breakpoints.
+#
+# @param data A data frame.
+# @param recruit_col The name of the recruitment column.
+# @param ssb_col The name of the SSB column.
+# @param opt_brks_val The desired number of breakpoints (integer).
+# @return A list containing the fitted model, detected breakpoints, and related objects.
+fit_strucchange <- function(data, recruit_col = "R", ssb_col = "SSB", opt_brks_val = 1) {
+  check_data_columns(data, c(recruit_col, ssb_col))
+  
+  tryCatch({
+    formula_str <- paste(recruit_col, "~", ssb_col)
+    bpts <- strucchange::breakpoints(as.formula(formula_str), data = data)
+    
+    if (opt_brks_val > 0) {
+      bpts2 <- strucchange::breakpoints(bpts, breaks = opt_brks_val)
+      best_brk <- data[[ssb_col]][bpts2$breakpoints]
+      
+      # Dynamically construct the formula using breakfactor for flexibility
+      # This creates dummy variables for each segment based on breakpoints
+      model_formula <- as.formula(paste(recruit_col, "~", "strucchange::breakfactor(bpts2, breaks =", opt_brks_val, ")"))
+      
+      model <- lm(model_formula, data = data)
+      
+      # Predict fitted values using the original data to ensure correct alignment
+      fitted_values <- predict(model, newdata = data)
+      
+      list(model = model, breakpoints = best_brk, bpts_obj = bpts, fitted = fitted_values)
+    } else {
+      # If 0 breakpoints are specified, fit a simple linear model (no structural change)
+      message("opt_brks_val is 0. Fitting a simple linear model as no structural change.")
+      model <- lm(as.formula(formula_str), data = data)
+      list(model = model, breakpoints = NULL, bpts_obj = NULL, fitted = fitted(model))}
+    
+  }, error = function(e) {
+    warning(paste("Structural change model failed:", e$message))
+    list(model = NULL, breakpoints = NULL, bpts_obj = NULL, fitted = NULL)})}
+
+# Model Comparison Function
+## Compare fitted models using AIC, RMSE, and R-squared
+#
+# @param models_list A list of lists, where each inner list contains a model object and fitted values.
+# @param observed_data A numeric vector of observed data for RMSE calculation.
+# @return A data frame summarizing model comparison metrics.
+compare_models <- function(models_list, observed_data) {
+  model_names <- names(models_list)
+  n_models <- length(models_list)
+  
+  comparison <- data.frame(
+    Model = model_names,
+    AIC = numeric(n_models),
+    RMSE = numeric(n_models),
+    R_squared = numeric(n_models),
+    stringsAsFactors = FALSE)
+  
+  for (i in seq_along(models_list)) {
+    model_info <- models_list[[i]]
+    
+    if (!is.null(model_info) && !is.null(model_info$model) && !is.null(model_info$fitted)) {
+      tryCatch({
+        # AIC calculation
+        comparison$AIC[i] <- AIC(model_info$model)
+        
+        # RMSE calculation
+        comparison$RMSE[i] <- rmse(model_info$fitted, observed_data)
+        
+        # R-squared calculation based on model type
+        if (inherits(model_info$model, "nls")) {
+          # For nls models (Beverton-Holt, Ricker), use pre-calculated R2 if available, else calculate
+          if (!is.null(model_info$r2)) {
+            comparison$R_squared[i] <- model_info$r2
+          } else {
+            # Calculate from fitted values for Ricker or if r2 wasnt stored for BH
+            comparison$R_squared[i] <- cor(model_info$fitted, observed_data, use = "pairwise.complete.obs")^2}
+        } else if (inherits(model_info$model, "lm") || inherits(model_info$model, "glm")) {
+          # For lm and glm, extract from summary
+          summary_model <- summary(model_info$model)
+          if (!is.null(summary_model$r.squared)) {
+            comparison$R_squared[i] <- summary_model$r.squared
+          } else if (!is.null(summary_model$adj.r.squared)) {
+            comparison$R_squared[i] <- summary_model$adj.r.squared
+          } else {
+            # Fallback for GLMs that dont report R-squared directly (e.g., some quasi-models)
+            comparison$R_squared[i] <- NA}
+        } else if (inherits(model_info$model, "segmented")) {
+          # For segmented models, extract R-squared from the underlying base model
+          if (inherits(model_info$model$obj, "lm")) {
+            comparison$R_squared[i] <- summary(model_info$model$obj)$r.squared
+          } else if (inherits(model_info$model$obj, "glm")) {
+            summary_obj <- summary(model_info$model$obj)
+            comparison$R_squared[i] <- ifelse(!is.null(summary_obj$r.squared), summary_obj$r.squared,
+                                              ifelse(!is.null(summary_obj$adj.r.squared), summary_obj$adj.r.squared, NA))
+          } else {
+            comparison$R_squared[i] <- NA}
+        } else {
+          comparison$R_squared[i] <- NA}
+        
+      }, error = function(e) {
+        warning(paste("Error during comparison for model", model_names[i], ":", e$message))
+        comparison$AIC[i] <- NA
+        comparison$RMSE[i] <- NA
+        comparison$R_squared[i] <- NA})
+    } else {
+      # If model or fitted values are NULL, set all metrics to NA
+      comparison$AIC[i] <- NA
+      comparison$RMSE[i] <- NA
+      comparison$R_squared[i] <- NA}}
+  
+  return(comparison)}
+
+# Main Analysis Workflow ----
+# Run a comprehensive Stock-Recruitment Relationship (SRR) analysis
+#
+# This function orchestrates the fitting of various SRR models and compares them.
+# Assumes `data_for_srr` is already prepared with appropriate columns and lags.
+#
+# @param data_for_srr A data frame containing the recruitment and SSB data.
+#   It should already include any necessary lagged SSB columns if required.
+# @param recruit_col The name of the recruitment column (e.g., "R", "R_0", "R_1", "R_3").
+# @param ssb_col The name of the SSB column (e.g., "SSB", "SSB_lag").
+# @param opt_brks_val The desired number of breakpoints for the structural change model (integer).
+# @return A list containing all fitted models, GLM diagnostic results, and a model comparison table.
+run_srr_analysis <- function(data_for_srr,
+                             recruit_col = "R",
+                             ssb_col = "SSB",
+                             opt_brks_val = 1) {
+  
+  cat("Starting SRR analysis...\n")
+  
+  # Ensure relevant columns are present and numeric, and drop rows with NAs
+  data_for_srr_cleaned <- data_for_srr %>%
+    dplyr::select(!!sym(recruit_col), !!sym(ssb_col)) %>%
+    tidyr::drop_na() %>% # Explicitly call tidyr::drop_na
+    dplyr::mutate(dplyr::across(c(!!sym(recruit_col), !!sym(ssb_col)), as.numeric)) # Ensure columns are numeric
+  
+  if (nrow(data_for_srr_cleaned) == 0) {
+    stop("Input data is empty after cleaning. Cannot perform SRR analysis.")}
+  
+  # Initialize results storage
+  models <- list()
+  
+  # 1. Basic models
+  cat("Fitting independence model...\n")
+  models$independence <- fit_independence_model(data_for_srr_cleaned, recruit_col, ssb_col)
+  
+  cat("Fitting Beverton-Holt model...\n")
+  models$beverton_holt <- fit_beverton_holt(data_for_srr_cleaned, recruit_col, ssb_col)
+  
+  cat("Fitting Ricker model...\n")
+  models$ricker <- fit_ricker(data_for_srr_cleaned, recruit_col, ssb_col)
+  
+  # 2. Segmented models
+  cat("Fitting segmented models (linear, log, negative binomial/quasipoisson)...\n")
+  segmented_results <- fit_segmented_models(data_for_srr_cleaned, recruit_col, ssb_col)
+  models$segmented_regular <- segmented_results$regular
+  models$segmented_log <- segmented_results$log
+  models$segmented_negbinom <- segmented_results$negbinom
+  if (!is.null(segmented_results$negbinom_fallback)) {
+    models$segmented_negbinom_fallback <- segmented_results$negbinom_fallback}
+  
+  # 3. Structural change model
+  cat(paste0("Fitting structural change model with ", opt_brks_val, " breakpoints...\n"))
+  models$strucchange <- fit_strucchange(data_for_srr_cleaned, recruit_col, ssb_col, opt_brks_val)
+  
+  # 4. GLM model comparison (for diagnostic purposes, not directly used in segmented here)
+  cat("Fitting base GLM models (Gaussian, Poisson, Quasipoisson, NB) for diagnostics...\n")
+  glm_diagnostic_results <- fit_glm_models(data_for_srr_cleaned, recruit_col, ssb_col)
+  # Store these GLMs in the main models list for comparison if desired
+  models$glm_gaussian <- list(model = glm_diagnostic_results$models$gaussian,
+                              fitted = if(!is.null(glm_diagnostic_results$models$gaussian)) fitted(glm_diagnostic_results$models$gaussian) else NULL)
+  models$glm_poisson <- list(model = glm_diagnostic_results$models$poisson,
+                             fitted = if(!is.null(glm_diagnostic_results$models$poisson)) fitted(glm_diagnostic_results$models$poisson) else NULL)
+  models$glm_quasipoisson <- list(model = glm_diagnostic_results$models$quasipoisson,
+                                  fitted = if(!is.null(glm_diagnostic_results$models$quasipoisson)) fitted(glm_diagnostic_results$models$quasipoisson) else NULL)
+  models$glm_negbinom <- list(model = glm_diagnostic_results$models$negbinom,
+                              fitted = if(!is.null(glm_diagnostic_results$models$negbinom)) fitted(glm_diagnostic_results$models$negbinom) else NULL)
+  
+  
+  # Prepare list of models for the final comparison table
+  models_for_comparison <- list(
+    independence = models$independence,
+    beverton_holt = models$beverton_holt,
+    ricker = models$ricker,
+    segmented_regular = models$segmented_regular,
+    segmented_log = models$segmented_log,
+    segmented_negbinom = models$segmented_negbinom) # NB or its QP fallback
+  if (!is.null(models$segmented_negbinom_fallback)) {
+    models_for_comparison$segmented_negbinom_fallback <- models$segmented_negbinom_fallback}
+  models_for_comparison$strucchange = models$strucchange
+  models_for_comparison$glm_gaussian = models$glm_gaussian
+  models_for_comparison$glm_poisson = models$glm_poisson
+  models_for_comparison$glm_quasipoisson = models$glm_quasipoisson
+  models_for_comparison$glm_negbinom = models$glm_negbinom
+  
+  
+  cat("Comparing all fitted models...\n")
+  comparison_table <- compare_models(models_for_comparison, data_for_srr_cleaned[[recruit_col]])
+  
+  cat("Analysis complete!\n")
+  
+  return(list(
+    all_fitted_models = models, # Contains all model objects and their fitted values
+    glm_diagnostic_results = glm_diagnostic_results, # Overdispersion for raw GLMs
+    comparison_table = comparison_table))}
