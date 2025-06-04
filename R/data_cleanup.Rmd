@@ -10,6 +10,7 @@ knitr::opts_knit$set(root.dir = normalizePath(".."))
 ```
 
 # Load packages
+
 ```{r}
 setwd("~/R Studio/NSAS Herring/NSAS-Herring")
 
@@ -22,7 +23,9 @@ library(reshape2)
 ```
 
 # Load and clean files
+
 ## LAI data import
+
 ```{r}
 ## Read LAI .txt data, rename its columns & convert from century break to full year
 LAI_full <- read.table("data raw/NSAS LAI.txt", header = TRUE, strip.white = TRUE) %>%
@@ -78,24 +81,53 @@ Herring_LAI <- Herring_full %>%
   drop_na()
 ```
 
-
 ## Environmental .nc data import
+
 ```{r}
 ## Load function from "functions.R"
 source("R/functions.R")
 
 ## Call function and store in environment
 env_data_full <- load_environmental_data("data raw/NS SSt Monthly.nc", "data raw/NS SBT Monthly.nc", "data raw/NS SSS Monthly.nc")
+
+## Break down into df and year average
+env_df_full <- c("SST", "SBT", "SSS") %>%
+  map_dfr(~ data.frame(Value = as.vector(env_data_full[[.x]]), 
+                       year = rep(env_data_full$years, each = dim(env_data_full[[.x]])[1] * dim(env_data_full[[.x]])[2]),
+                       Variable = .x)) %>%
+  group_by(year, Variable) %>%
+  summarise(Mean_Value = mean(Value, na.rm = TRUE), .groups = 'drop') %>%
+  pivot_wider(names_from = Variable, values_from = Mean_Value, names_prefix = "mean_") %>%
+  arrange(year)
 ```
 
 ### Splitting environmental data by components
+
 ```{r}
 ## Call the function and store result in environment (function in "functions.R")
 env_data_subset <- subset_environmental_data(env_data_full)
+
+## Break down into df and year average
+env_df_subset <- names(env_data_subset) %>%
+  map_dfr(~ {
+    region_data <- env_data_subset[[.x]]
+    c("SST", "SBT", "SSS") %>%
+      map_dfr(function(var) {
+        data.frame(
+          Value = as.vector(region_data[[var]]), 
+          year = rep(region_data$years, each = dim(region_data[[var]])[1] * dim(region_data[[var]])[2]),
+          Variable = var,
+          Region = .x)})}) %>%
+  group_by(Region, year, Variable) %>%
+  summarise(Mean_Value = mean(Value, na.rm = TRUE), .groups = 'drop') %>%
+  pivot_wider(names_from = Variable, values_from = Mean_Value, names_prefix = "mean_") %>%
+  arrange(Region, year)
 ```
 
 # First visual investigation
+
 ## LAI data visualization
+
 ```{r}
 ## Plot timeseries of LAI by component
 ### Add LAI by year
@@ -176,6 +208,7 @@ plot_SSB_component_b
 ```
 
 ## Environmental data visualization
+
 ```{r}
 ## Call function and plot combined data (function in "functions.R")
 plot_env_data_full <- plot_environmental_ts(env_data_full, "Overall North Sea")
@@ -194,7 +227,9 @@ print(plot_env_data_Downs)
 ```
 
 # Save data and plots
+
 ## Save rdata
+
 ```{r}
 ### LAI data
 save(LAI_full, file = file.path("data/", "LAI_full.Rdata"))
@@ -204,10 +239,13 @@ save(Herring_LAI, file = file.path("data/", "Herring_LAI.Rdata"))
 
 ### Environmental data
 save(env_data_full, file = file.path("data/", "env_data_full.Rdata"))
+save(env_df_full, file = file.path("data/", "env_df_full.Rdata"))
 save(env_data_subset, file = file.path("data/", "env_data_subset.Rdata"))
+save(env_df_subset, file = file.path("data/", "env_df_subset.Rdata"))
 ```
 
 ## Save plots
+
 ```{r}
 ### LAI plots
 ggsave(filename = file.path("plots/", "LAI_by_year.png"),

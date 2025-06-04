@@ -701,3 +701,41 @@ plot_SRR <- function(data, break_years, title_stock, used_model,
                                size = 3, col = "gray30", segment.size = 0.2)}}
 
   return(p)}
+
+
+#--------------------------------------------------------------------------------------
+## tGAM Analysis
+#--------------------------------------------------------------------------------------
+
+run_threshold_gam <- function(data, 
+                              response_var, 
+                              pressure_var, 
+                              threshold_var, 
+                              time_var = "year") {
+  
+  # Create variables - use [[ ]] to access columns by variable name
+  y <- data[[response_var]]
+  x <- data[[pressure_var]]
+  x2 <- data[[threshold_var]]
+  time <- data[[time_var]]
+  
+  mod <- gam(y ~ s(x, k = 3)) 
+  tmod <- thresh_gam(model = mod, ind_vec = y, press_vec = x, t_var = x2, name_t_var = threshold_var,
+                     k = 4, a = 0.2, b = 0.8)                             
+  
+  # Test interaction
+  print("Leave one out crossvalidation result:")
+  print(loocv_result <- loocv_thresh_gam(model = mod, ind_vec = y, press_vec = x, t_var = x2, name_t_var = threshold_var, k = 4, a = 0.2, b = 0.8, time = time))
+  
+  print("tmod summary")
+  print(summary(tmod))
+  print("tmod mr")
+  print(tmod$mr)
+  
+  tmod$train_na <- rep(FALSE, times = length(y))
+  
+  print("tmod diagnostic plots")
+  print(plot_diagnostics(tmod)$all_plots)
+  
+  # Add vector with predicted values to data set
+  return(tgam_pred <- predict(tmod))}
