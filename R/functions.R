@@ -256,6 +256,88 @@ opt_bpts <- function(x) {
 
 
 #--------------------------------------------------------------------------------------
+## Breakpoint analysis
+#--------------------------------------------------------------------------------------
+
+breakpoint_analysis <- function(data, ssb_col, f_col, year_col, 
+                                lag_years = 1, 
+                                region_name = "Region", 
+                                plot_breakpoints = TRUE, 
+                                dataset_name = NULL) {
+  
+  # Print region being analyzed
+  cat("=== Analysis for", region_name, "===\n")
+  cat("# Using", lag_years, "year lag\n")
+  
+  # Create time-lag object using specified lag
+  data$SSB_lag <- lag(data[[ssb_col]], lag_years)
+  
+  if (!is.null(dataset_name)) {
+    assign(dataset_name, data, envir = parent.frame())}
+  
+  # Remove rows with missing values for analysis
+  analysis_data <- data[complete.cases(data[c(ssb_col, f_col, "SSB_lag")]), ]
+  
+  if(nrow(analysis_data) < nrow(data)) {
+    cat("# Removed", nrow(data) - nrow(analysis_data), "rows with missing values\n")}
+  
+  # Break-point analysis
+  bpts <- strucchange::breakpoints(analysis_data$SSB_lag/1000000 ~ analysis_data[[f_col]])
+  
+  if(plot_breakpoints) {
+    plot(bpts, main = paste("Breakpoints for", region_name))}
+  
+  # Get summary and find optimal breaks
+  bpts_sum <- summary(bpts)
+  opt_brks <- opt_bpts(bpts_sum$RSS["BIC",])
+  
+  cat("# Optimal number of breaks:", opt_brks[1], "\n")
+  
+  # Get breakpoints with optimal number of breaks
+  bpts2 <- strucchange::breakpoints(bpts, breaks = opt_brks[1])
+  best_brk <- analysis_data[[f_col]][bpts2$breakpoints]
+  
+  cat("# Best breakpoint F values:\n")
+  cat("####", paste(round(best_brk, 3), collapse = " "), "\n")
+  
+  # Get breakpoint years
+  best_brk_years <- analysis_data[[year_col]][bpts2$breakpoints]
+  
+  cat("# Best breakpoint years:\n") 
+  cat("####", paste(best_brk_years, collapse = ", "), "\n")
+  
+  # Create confidence interval plot
+  par(mfrow = c(1,1))
+  ci_mod <- confint(bpts, breaks = opt_brks[1])
+  
+  plot(analysis_data$SSB_lag/1000000 ~ analysis_data[[f_col]], type = "p",
+       xlab = "F", ylab = "SSB (millions)",
+       main = paste("SSB vs F with Breakpoints -", region_name))
+  
+  # Add confidence interval lines
+  for (i in 1:opt_brks[1]) {
+    abline(v = analysis_data[[f_col]][ci_mod$confint[i,2]], col = "blue", lwd = 2)
+    abline(v = analysis_data[[f_col]][ci_mod$confint[i,1]], col = "red", lty = 3)
+    abline(v = analysis_data[[f_col]][ci_mod$confint[i,3]], col = "red", lty = 3)}
+  
+  legend("topright", legend = c("Best estimate", "Confidence limits"), 
+         col = c("blue", "red"), lty = c(1, 3), lwd = c(2, 1))
+  
+  # Return results as a list
+  results <- list(
+    region = region_name,
+    lag_used = lag_years,
+    breakpoints = bpts2,
+    optimal_breaks = opt_brks[1],
+    break_f_values = best_brk,
+    break_years = best_brk_years,
+    confidence_intervals = ci_mod)
+  
+  cat("\n")
+  return(results)}
+
+
+#--------------------------------------------------------------------------------------
 ## Plot Hysteresis
 #--------------------------------------------------------------------------------------
 
@@ -263,6 +345,9 @@ plot_hysteresis <- function(data, break_years, component,
                             msy_btrigger = 1130747, 
                             fmsy = 0.32,
                             colors = c("steelblue", "darkorange", "purple", "lightgreen", "indianred")) {
+  
+  msy_btrigger <- as.numeric(msy_btrigger)
+  fmsy <- as.numeric(fmsy)
   
   # Determine number of break years
   n_breaks <- length(break_years)
@@ -290,13 +375,13 @@ plot_hysteresis <- function(data, break_years, component,
       phase_data_list[[i]] <- data %>% filter(year > break_years[i-1] & year <= break_years[i])}}
   
   # Create the plot
-  p <- ggplot(data = data, aes(x = F, y = SSB/1000000)) +
+  p <- ggplot(data = data, aes(x = F, y = SSB_lag/1000000)) +
     geom_path(colour = "grey") +
     geom_hline(yintercept = msy_btrigger/1000000, linetype = "dashed", color = "gray30") +
     geom_vline(xintercept = fmsy, linetype = "dashed", color = "gray30") +
     geom_label(x = fmsy, y = 0.5, label = expression("F"[MSY]), 
                color = "gray30", size = 3.5) +
-    geom_label(x = 1.2, y = msy_btrigger/1000000, label = expression("MSY B"[trigger]), 
+    geom_label(x = 1, y = msy_btrigger/1000000, label = expression("MSY B"[trigger]), 
                color = "gray30", size = 3.5, fontface = "bold") +
     geom_point(colour = hyst_phases) +
     labs(title = paste("Hysteresis in", component), x = "F", y = "SSB in millions") +
@@ -306,7 +391,7 @@ plot_hysteresis <- function(data, break_years, component,
   # Add geom_smooth for each phase (only if data exists)
   for (i in 1:n_phases) {
     if (nrow(phase_data_list[[i]]) > 0) {
-      p <- p + geom_smooth(data = phase_data_list[[i]], aes(x = F, y = SSB/1000000),
+      p <- p + geom_smooth(data = phase_data_list[[i]], aes(x = F, y = SSB_lag/1000000),
                            method = "lm", colour = colors[i])}}
   
   # Add text labels for break years (only for existing break years)
@@ -331,6 +416,78 @@ plot_hysteresis <- function(data, break_years, component,
                            size = 3, col = "black", segment.size = 0.2)
   
   return(p)}
+
+
+#--------------------------------------------------------------------------------------
+## Test different Models
+#--------------------------------------------------------------------------------------
+
+srr_breakpoint_analysis <- function(data, ssb_col = "SSB", r_col = "R", year_col = "year",
+                                    region_name = "Region", plot_breakpoints = TRUE) {
+  
+  # Print region being analyzed
+  cat("=== SRR Analysis for", region_name, "===\n")
+  
+  # Remove rows with missing values for analysis
+  analysis_data <- data[complete.cases(data[c(ssb_col, r_col, year_col)]), ]
+  
+  if(nrow(analysis_data) < nrow(data)) {
+    cat("# Removed", nrow(data) - nrow(analysis_data), "rows with missing values\n")}
+  
+  # Break-point analysis for Stock-Recruitment Relationship
+  bpts_SRR <- strucchange::breakpoints(analysis_data[[r_col]] ~ analysis_data[[ssb_col]])
+  
+  if(plot_breakpoints) {
+    plot(bpts_SRR, main = paste("SRR Breakpoints for", region_name))}
+  
+  # Get summary and find optimal breaks
+  bpts_SRR_sum <- summary(bpts_SRR)
+  opt_brks_SRR <- opt_bpts(bpts_SRR_sum$RSS["BIC",])
+  
+  cat("# Optimal number of breaks:", opt_brks_SRR[1], "\n")
+  
+  # Get breakpoints with optimal number of breaks
+  bpts2_SRR <- strucchange::breakpoints(bpts_SRR, breaks = opt_brks_SRR[1])
+  best_brk_SRR <- analysis_data[[ssb_col]][bpts2_SRR$breakpoints]
+  
+  cat("# Best breakpoint SSB values:\n")
+  cat("#", paste(round(best_brk_SRR, 1), collapse = ", "), "\n")
+  
+  # Get breakpoint years
+  best_brk_years_SRR <- analysis_data[[year_col]][bpts2_SRR$breakpoints]
+  
+  cat("# Best breakpoint years:\n") 
+  cat("#", paste(best_brk_years_SRR, collapse = ", "), "\n")
+  
+  # Create stock-recruitment plot with breakpoints
+  par(mfrow = c(1,1))
+  ci_mod_SRR <- confint(bpts_SRR, breaks = opt_brks_SRR[1])
+  
+  plot(analysis_data[[r_col]] ~ analysis_data[[ssb_col]], type = "p",
+       xlab = "SSB", ylab = "Recruitment (R)",
+       main = paste("Stock-Recruitment Relationship with Breakpoints -", region_name))
+  
+  # Add confidence interval lines
+  for (i in 1:opt_brks_SRR[1]) {
+    abline(v = analysis_data[[ssb_col]][ci_mod_SRR$confint[i,2]], col = "blue", lwd = 2)
+    abline(v = analysis_data[[ssb_col]][ci_mod_SRR$confint[i,1]], col = "red", lty = 3)
+    abline(v = analysis_data[[ssb_col]][ci_mod_SRR$confint[i,3]], col = "red", lty = 3)}
+  
+  legend("topright", legend = c("Best estimate", "Confidence limits"), 
+         col = c("blue", "red"), lty = c(1, 3), lwd = c(2, 1))
+  
+  # Return results as a list
+  results <- list(
+    region = region_name,
+    breakpoints = bpts2_SRR,
+    optimal_breaks = opt_brks_SRR[1],
+    break_ssb_values = best_brk_SRR,
+    break_years = best_brk_years_SRR,
+    confidence_intervals = ci_mod_SRR,
+    summary = bpts_SRR_sum)
+  
+  cat("\n") # Add spacing between analyses
+  return(results)}
 
 
 #--------------------------------------------------------------------------------------

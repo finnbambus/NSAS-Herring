@@ -95,42 +95,26 @@ ggsave(filename = file.path("plots/", "SSB_cpt_full.png"),
 
 ```{r}
 ### Check for time-lags
-#SSB_test <- Herring_full[-75,]?
 ccf(Herring_full$SSB[-(79:78)], Herring_full$F[-(79:78)], type = "correlation") # 3 years lag
 
-#### Make time-lag object
-Herring_full$SSB_lag <- lag(Herring_full$SSB, 3)
+### Call "breakpoint_analysis" function
+brkpt_results <- breakpoint_analysis(Herring_full, "SSB", "F", "year",
+                                    lag_years = 3, 
+                                    region_name = "Full Stock",
+                                    dataset_name = "Herring_full")
 
-### Break-point analysis
-bpts <- strucchange::breakpoints(Herring_full$SSB_lag/1000000 ~ Herring_full$F)
-plot(bpts)
-summary(bpts)
-
-bpts_sum <- summary(bpts)
-opt_brks <- opt_bpts(bpts_sum$RSS["BIC",])
-opt_brks #### 4
-bpts2 <- strucchange:: breakpoints(bpts, breaks = opt_brks[1])
-best_brk <- Herring_full$F[bpts2$breakpoints]
-best_brk
-####  0.28 1.09 0.28 0.189
-best_brk_years <- Herring_full$year[bpts2$breakpoints]
-best_brk_years
-#### 1957, 1968, 1983, 1997
-
-par(mfrow = c(1,1))
-ci_mod <- confint(bpts, breaks = opt_brks)
-plot(Herring_full$SSB_lag/1000000 ~ Herring_full$F, type = "p")
-for (i in 1: opt_brks) {
-  abline(v = Herring_full$F[ci_mod$confint[i,2]], col = "blue")
-  abline(v = Herring_full$F[ci_mod$confint[i,1]], col = "red", lty = 3)
-  abline(v = Herring_full$F[ci_mod$confint[i,3]], col = "red", lty = 3)}
+# Optimal number of breaks: 4 
+# Best breakpoint F values:
+# 0.25  1.43  0.43  0.22 
+# Best breakpoint years:
+# 1960, 1971, 1986, 2000 
 ```
 
 ## Plotting
 
 ```{r}
 ### Call function plot_hysteresis
-plot_hysteresis_full <- plot_hysteresis(Herring_full, best_brk_years, "Full Stock")
+plot_hysteresis_full <- plot_hysteresis(Herring_full, brkpt_results$break_years, "Full Stock")
 plot_hysteresis_full
 ```
 
@@ -163,269 +147,14 @@ print(SSR_analysis$comparison_table)
 
 #### strucchange model shows lowest RMSE
 
-#### Strucchange breakpoint analysis
-bpts_SRR <- strucchange :: breakpoints(R ~ SSB, data = Herring_full)
-bpts_SRR_sum <- summary(bpts_SRR)
-opt_brks_SRR <- opt_bpts(bpts_SRR_sum$RSS["BIC",])
-opt_brks_SRR #2
-bpts2_SRR <- strucchange:: breakpoints(bpts_SRR, breaks = opt_brks[1])
-bpts2_SRR <-strucchange :: breakpoints(bpts_SRR, breaks = opt_brks_SRR)
+# Call function "srr_breakpoint_analysis
+results_SRR <- srr_breakpoint_analysis(Herring_full, "SSB", "R", "year", "Herring Full")
 
-best_brk_SRR <- Herring_full$SSB[bpts2_SRR$breakpoints]
-best_brk_SRR
-#### 264793.8,  2391903.7
-best_brk_years_SRR <- Herring_full$year[bpts2_SRR$breakpoints]
-best_brk_years_SRR
-#### 1981,      2002
-```
-
-## Cross Validation
-
-```{r}
-loocv_data <- Herring_full[-(1:3),]
-loocv_data <- arrange(loocv_data, SSB_lag)
-loocv_data$R_log <- log(loocv_data$R)
-loocv_data$SSB_lag_log <- log(loocv_data$SSB_lag)
-
-# #prepare data
-dat <- loocv_data %>%
-  select("year", "R", "SSB_lag", "R_log", "SSB_lag_log")
-
-rmse_mean_plaice <- cross_valid(dataset = dat)
-rmse_mean_plaice
-
-```
-
-```{r}
-cross_valid <- function(dataset) {
-  rmse_values <- data.frame("run" = c(1:nrow(dataset)),
-                            "linear model" = c(1:nrow(dataset)),
-                            "beverton"= c(1:nrow(dataset)),
-                            "ricker"= c(1:nrow(dataset)),
-                            "segmented"= c(1:nrow(dataset)),
-                            "segmented log"= c(1:nrow(dataset)),
-                            "segmented best glm"= c(1:nrow(dataset)),
-                            "strucchange" = c(1:nrow(dataset)))
-
-  rmse_values_means <- data.frame("linear model" = 0,
-                                  "beverton"= 0,
-                                  "ricker"= 0,
-                                  "segmented"= 0,
-                                  "segmented log"= 0,
-                                  "segmented best glm"= 0,
-                                  "strucchange" = 0)
-
-  rmse_values_train <- data.frame("run" = c(1:nrow(dataset)),
-                            "linear model" = c(1:nrow(dataset)),
-                            "beverton"= c(1:nrow(dataset)),
-                            "ricker"= c(1:nrow(dataset)),
-                            "segmented"= c(1:nrow(dataset)),
-                            "segmented log"= c(1:nrow(dataset)),
-                            "segmented best glm"= c(1:nrow(dataset)),
-                            "strucchange" = c(1:nrow(dataset)))
-
-  rmse_values_means_train <- data.frame("linear model" = 0,
-                                  "beverton"= 0,
-                                  "ricker"= 0,
-                                  "segmented"= 0,
-                                  "segmented log"= 0,
-                                  "segmented best glm"= 0,
-                                  "strucchange" = 0)
-
-  for(i in 1:nrow(dataset)){
-    # Get training and test data set for each run
-    train_data <- dataset[-i, ]  # Changed from 'dat' to 'dataset'
-    test_data <- dataset[i, ]    # Changed from 'dat' to 'dataset'
-
-    # Linear model
-    tryCatch({
-      m1 <- lm(R ~ SSB_lag, data = train_data)
-      fitI <- predict(m1, newdata = test_data)
-      if(!is.na(fitI)) {
-        rmse_values$linear.model[i] <- rmse(sim = fitI, obs = test_data$R)
-      } else {
-        rmse_values$linear.model[i] <- NA
-      }
-      fitI_train <- predict(m1, newdata = train_data)
-      rmse_values_train$linear.model[i] <- rmse(sim = fitI_train, obs = train_data$R)
-    }, error = function(e) {
-      rmse_values$linear.model[i] <<- NA
-      rmse_values_train$linear.model[i] <<- NA
-    })
-
-    # Beverton-Holt
-    tryCatch({
-      svR <- srStarts(R ~ SSB_lag, data=train_data, type="BevertonHolt")
-      bh <- srFuns("BevertonHolt")
-      srR_beverton <- nls(log(R)~log(bh(SSB_lag,a,b)), data=train_data, start=svR)
-      
-      pR_beverton_test <- bh(test_data$SSB_lag, a=coef(srR_beverton))
-      if(!any(is.na(pR_beverton_test)) && !any(is.infinite(pR_beverton_test))) {
-        rmse_values$beverton[i] <- rmse(sim = pR_beverton_test, obs = test_data$R)
-      } else {
-        rmse_values$beverton[i] <- NA
-      }
-
-      pR_beverton_train <- bh(train_data$SSB_lag, a=coef(srR_beverton))
-      if(!any(is.na(pR_beverton_train)) && !any(is.infinite(pR_beverton_train))) {
-        rmse_values_train$beverton[i] <- rmse(sim = pR_beverton_train, obs = train_data$R)
-      } else {
-        rmse_values_train$beverton[i] <- NA
-      }
-    }, error = function(e) {
-      rmse_values$beverton[i] <<- NA
-      rmse_values_train$beverton[i] <<- NA
-    })
-
-    # Ricker
-    tryCatch({
-      svR <- srStarts(R ~ SSB_lag, data=train_data, type="Ricker")
-      rckr <- srFuns("Ricker")
-      srR_ricker <- nls(log(R)~log(rckr(SSB_lag,a,b)), data=train_data, start=svR)
-      
-      pR_ricker_test <- rckr(test_data$SSB_lag, a=coef(srR_ricker))
-      if(!any(is.na(pR_ricker_test)) && !any(is.infinite(pR_ricker_test))) {
-        rmse_values$ricker[i] <- rmse(sim = pR_ricker_test, obs = test_data$R)
-      } else {
-        rmse_values$ricker[i] <- NA
-      }
-
-      pR_ricker_train <- rckr(train_data$SSB_lag, a=coef(srR_ricker))
-      if(!any(is.na(pR_ricker_train)) && !any(is.infinite(pR_ricker_train))) {
-        rmse_values_train$ricker[i] <- rmse(sim = pR_ricker_train, obs = train_data$R)
-      } else {
-        rmse_values_train$ricker[i] <- NA
-      }
-    }, error = function(e) {
-      rmse_values$ricker[i] <<- NA
-      rmse_values_train$ricker[i] <<- NA
-    })
-
-    # Segmented
-    tryCatch({
-      seg <- segmented::segmented(lm(R ~ SSB_lag, data = train_data), seg.Z = ~SSB_lag,
-                                  psi = mean(train_data$SSB_lag, na.rm = T))
-      fit_segmented_test <- predict.segmented(seg, newdata = test_data)
-      if(!any(is.na(fit_segmented_test))) {
-        rmse_values$segmented[i] <- rmse(sim = fit_segmented_test, obs = test_data$R)
-      } else {
-        rmse_values$segmented[i] <- NA
-      }
-
-      fit_segmented_train <- predict.segmented(seg, newdata = train_data)
-      rmse_values_train$segmented[i] <- rmse(sim = fit_segmented_train, obs = train_data$R)
-    }, error = function(e) {
-      rmse_values$segmented[i] <<- NA
-      rmse_values_train$segmented[i] <<- NA
-    })
-
-    # Segmented log
-    tryCatch({
-      seg_log <- segmented::segmented(lm(R_log ~ SSB_lag_log, data = train_data), seg.Z = ~ SSB_lag_log,
-                                      psi = mean(train_data$SSB_lag_log, na.rm = T))
-      fit_segmented_log_test <- predict.segmented(seg_log, newdata = test_data)
-      if(!any(is.na(fit_segmented_log_test))) {
-        rmse_values$segmented.log[i] <- rmse(sim = fit_segmented_log_test, obs = test_data$R)
-      } else {
-        rmse_values$segmented.log[i] <- NA
-      }
-
-      fit_segmented_log_train <- predict.segmented(seg_log, newdata = train_data)
-      rmse_values_train$segmented.log[i] <- rmse(sim = fit_segmented_log_train, obs = train_data$R)
-    }, error = function(e) {
-      rmse_values$segmented.log[i] <<- NA
-      rmse_values_train$segmented.log[i] <<- NA
-    })
-
-    # Segmented best glm
-    tryCatch({
-      seg_negbi <- segmented::segmented(glm.nb(R ~ SSB_lag, data = train_data), seg.Z = ~SSB_lag,
-                                        psi = mean(train_data$SSB_lag, na.rm = T))
-      fit_segmented_negbi_test <- predict.segmented(seg_negbi, newdata = test_data)
-      if(!any(is.na(fit_segmented_negbi_test))) {
-        rmse_values$segmented.best.glm[i] <- rmse(sim = fit_segmented_negbi_test, obs = test_data$R)
-      } else {
-        rmse_values$segmented.best.glm[i] <- NA
-      }
-
-      fit_segmented_negbi_train <- predict.segmented(seg_negbi, newdata = train_data)
-      rmse_values_train$segmented.best.glm[i] <- rmse(sim = fit_segmented_negbi_train, obs = train_data$R)
-    }, error = function(e) {
-      rmse_values$segmented.best.glm[i] <<- NA
-      rmse_values_train$segmented.best.glm[i] <<- NA
-    })
-
-    # Strucchange
-    tryCatch({
-      bpts <- strucchange::breakpoints(R ~ SSB_lag, data = train_data)
-      bpts_sum <- summary(bpts)
-      opt_brks <- opt_bpts(bpts_sum$RSS["BIC",])
-      
-      if(is_empty(opt_brks)){
-        rmse_values$strucchange[i] <- NA
-        rmse_values_train$strucchange[i] <- NA
-        next
-      }
-      
-      if(opt_brks[[1]] == 1){
-        bpts2 <- strucchange::breakpoints(bpts, breaks = opt_brks[[1]])
-        best_brk <- train_data$SSB_lag[bpts2$breakpoints]
-
-        strucc_model <- lm(R ~ strucchange::breakfactor(bpts2, breaks = opt_brks[[1]]), data = train_data)
-        fit_strucc <- fitted(strucc_model)
-        rmse_values_train$strucchange[i] <- rmse(sim = fit_strucc, obs = train_data$R)
-
-        # For test prediction - need to be careful with new data
-        test_breakfactor <- ifelse(test_data$SSB_lag <= best_brk[1], 1, 2)
-        test_data_pred <- test_data
-        test_data_pred$breakfactor <- factor(test_breakfactor, levels = 1:2)
-        
-        fit_struc_test <- predict(strucc_model, newdata = test_data_pred)
-        if(!any(is.na(fit_struc_test))) {
-          rmse_values$strucchange[i] <- rmse(sim = fit_struc_test, obs = test_data$R)
-        } else {
-          rmse_values$strucchange[i] <- NA
-        }
-
-      } else if(opt_brks[[1]] == 2){
-        bpts2 <- strucchange::breakpoints(bpts, breaks = opt_brks[[1]])
-        best_brk <- train_data$SSB_lag[bpts2$breakpoints]
-
-        strucc_model <- lm(R ~ strucchange::breakfactor(bpts2, breaks = opt_brks[[1]]), data = train_data)
-        fit_strucc <- fitted(strucc_model)
-        rmse_values_train$strucchange[i] <- rmse(sim = fit_strucc, obs = train_data$R)
-
-        # For test prediction
-        test_breakfactor <- ifelse(test_data$SSB_lag <= best_brk[1], 1, 
-                                  ifelse(test_data$SSB_lag <= best_brk[2], 2, 3))
-        test_data_pred <- test_data
-        test_data_pred$breakfactor <- factor(test_breakfactor, levels = 1:3)
-        
-        fit_struc_test <- predict(strucc_model, newdata = test_data_pred)
-        if(!any(is.na(fit_struc_test))) {
-          rmse_values$strucchange[i] <- rmse(sim = fit_struc_test, obs = test_data$R)
-        } else {
-          rmse_values$strucchange[i] <- NA
-        }
-      } else {
-        rmse_values$strucchange[i] <- NA
-        rmse_values_train$strucchange[i] <- NA
-      }
-    }, error = function(e) {
-      rmse_values$strucchange[i] <<- NA
-      rmse_values_train$strucchange[i] <<- NA
-    })
-
-  } # End for loop 1
-
-  # Calculate means, handling NA values
-  for(i in 2:ncol(rmse_values)){
-    rmse_values_means[i-1] <- mean(rmse_values[, i], na.rm = TRUE)
-    rmse_values_means_train[i-1] <- mean(rmse_values_train[, i], na.rm = TRUE)
-  } # End for loop 2
-
-  return(list(test = rmse_values_means, train = rmse_values_means_train))
-}
+# Optimal number of breaks: 2 
+# Best breakpoint SSB values:
+# 264793.8  2391903.7 
+# Best breakpoint years:
+# 1981,     2002 
 ```
 
 ## Plotting

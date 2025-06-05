@@ -16,17 +16,29 @@ setwd("~/R Studio/NSAS Herring/NSAS-Herring")
 
 library(bcp)
 library(changepoint)
-library(tidyverse)
-library(tidyverse)
 library(ggrepel)
 library(readxl)
 library(ggplot2)
+library(tidyverse)
+library(FSA)
+library(strucchange)
+library(MASS)
+library(hydroGOF)
+library(mgcv)
+library(INDperform)
 ```
 
 ## Import data
 
 ```{r}
-load("data/SSB_LAI.Rdata")
+load("data/Herring_LAI.Rdata")
+load("data/env_df_subset.Rdata")
+
+### Split data into components
+Herring_ShOr <- Herring_LAI[Herring_LAI$component == "Shetland_Orkney",]
+Herring_Buchan <- Herring_LAI[Herring_LAI$component == "Buchan",]
+Herring_Banks <- Herring_LAI[Herring_LAI$component == "Banks",]
+Herring_Downs <- Herring_LAI[Herring_LAI$component == "Downs",]
 ```
 
 # Change-points
@@ -36,18 +48,18 @@ load("data/SSB_LAI.Rdata")
 ```{r}
 # Shetland / Orkney
 ### cpts analysis
-ssbcpts <- cpt.mean(data = SSB_LAI$SSB_component[SSB_LAI$component == "Shetland_Orkney"], method = "BinSeg", Q = 6)
+ssbcpts <- cpt.mean(data = Herring_ShOr$SSB_component, method = "BinSeg", Q = 6)
 plot(ssbcpts, type = "l", cpt.col = "navyblue", xlab = "Index", pt.widt = 4)
 cpts(ssbcpts)
-SSB_LAI$year[SSB_LAI$component == "Shetland_Orkney"][c(12, 19, 23, 25, 34, 43)]
+Herring_Shetland_Orkney$year[c(12, 19, 23, 25, 34, 43)]
 #### Index: 12,   19,   23,   25,   34,   43
 #### Years: 1983, 1990, 1994, 1996, 2005, 2014
 
 ### bcp analysis
-bcp.ssb <- bcp(SSB_LAI$SSB_component[SSB_LAI$component == "Shetland_Orkney"])
+bcp.ssb <- bcp(Herring_ShOr$SSB_component)
 plot(bcp.ssb, main = "SSB")
 which(bcp.ssb$posterior.prob >= 0.7)
-SSB_LAI$year[SSB_LAI$component == "Shetland_Orkney"][c(12, 19, 23, 31, 34, 43)]
+Herring_Shetland_Orkney$year[c(12, 19, 23, 31, 34, 43)]
 #### Index: 12,   19,   23,   31,   34,   43
 #### Years: 1983, 1990, 1994, 2002, 2005, 2014
 
@@ -58,18 +70,18 @@ SSB_LAI$year[SSB_LAI$component == "Shetland_Orkney"][c(12, 19, 23, 31, 34, 43)]
 
 # Buchan
 ### cpts analysis
-ssbcpts <- cpt.mean(data = SSB_LAI$SSB_component[SSB_LAI$component == "Buchan"], method = "BinSeg", Q = 6)
+ssbcpts <- cpt.mean(data = Herring_Buchan$SSB_component, method = "BinSeg", Q = 6)
 plot(ssbcpts, type = "l", cpt.col = "navyblue", xlab = "Index", pt.widt = 4)
 cpts(ssbcpts)
-SSB_LAI$year[SSB_LAI$component == "Buchan"][c(15, 18, 22, 38, 40, 47)]
+Herring_Buchan$year[c(15, 18, 22, 38, 40, 47)]
 #### Index: 11,   18,   22,   38,   40,   47
 #### Years: 1986, 1989, 1993, 2009, 2011, 2018
 
 ### bcp analysis
-bcp.ssb <- bcp(SSB_LAI$SSB_component[SSB_LAI$component == "Buchan"])
+bcp.ssb <- bcp(Herring_Buchan$SSB_component)
 plot(bcp.ssb, main = "SSB")
 which(bcp.ssb$posterior.prob >= 0.7)
-SSB_LAI$year[SSB_LAI$component == "Shetland_Orkney"][c(18, 30, 39, 47)]
+Herring_Buchan$year[c(18, 30, 39, 47)]
 #### Index: 18-23, 30,  39,   46-47
 #### Years: 1989, 2001, 2010, 2018
 
@@ -80,18 +92,18 @@ SSB_LAI$year[SSB_LAI$component == "Shetland_Orkney"][c(18, 30, 39, 47)]
 
 # Banks
 ### cpts analysis
-ssbcpts <- cpt.mean(data = SSB_LAI$SSB_component[SSB_LAI$component == "Banks"], method = "BinSeg", Q = 6)
+ssbcpts <- cpt.mean(data = Herring_Banks$SSB_component, method = "BinSeg", Q = 6)
 plot(ssbcpts, type = "l", cpt.col = "navyblue", xlab = "Index", pt.widt = 4)
 cpts(ssbcpts)
-SSB_LAI$year[SSB_LAI$component == "Banks"][c(11, 19, 29, 34, 38, 48)]
+Herring_Banks$year[c(11, 19, 29, 34, 38, 48)]
 #### Index: 11,   19,   29,   34,   38,   48
 #### Years: 1982, 1990, 2000, 2005, 2009, 2018
 
 ### bcp analysis
-bcp.ssb <- bcp(SSB_LAI$SSB_component[SSB_LAI$component == "Banks"])
+bcp.ssb <- bcp(Herring_Banks$SSB_component)
 plot(bcp.ssb, main = "SSB")
 which(bcp.ssb$posterior.prob >= 0.7)
-SSB_LAI$year[SSB_LAI$component == "Banks"][c(12, 19, 29, 30, 34)]
+Herring_Banks$year[c(12, 19, 29, 30, 34)]
 #### Index: 12,   19,   29,   30,   34
 #### Years: 1983, 1990, 2000, 2001, 2005
 
@@ -102,18 +114,18 @@ SSB_LAI$year[SSB_LAI$component == "Banks"][c(12, 19, 29, 30, 34)]
 
 # Downs
 ### cpts analysis
-ssbcpts <- cpt.mean(data = SSB_LAI$SSB_component[SSB_LAI$component == "Downs"], method = "BinSeg", Q = 6)
+ssbcpts <- cpt.mean(data = Herring_Downs$SSB_component, method = "BinSeg", Q = 6)
 plot(ssbcpts, type = "l", cpt.col = "navyblue", xlab = "Index", pt.widt = 4)
 cpts(ssbcpts)
-SSB_LAI$year[SSB_LAI$component == "Downs"][c(16, 28, 30, 40, 44, 50)]
+Herring_Downs$year[c(16, 28, 30, 40, 44, 50)]
 #### Index: 16,   28,   30,   40,   44,   50
 #### Years: 1987, 1999, 2001, 2011, 2015, 2021
 
 ### bcp analysis
-bcp.ssb <- bcp(SSB_LAI$SSB_component[SSB_LAI$component == "Downs"])
+bcp.ssb <- bcp(Herring_Downs$SSB_component)
 plot(bcp.ssb, main = "SSB")
 which(bcp.ssb$posterior.prob >= 0.7)
-SSB_LAI$year[SSB_LAI$component == "Downs"][c(30, 40, 44)]
+Herring_Downs$year[c(30, 40, 44)]
 #### Index: 30,   40,   44,
 #### Years: 2001, 2011, 2015
 
@@ -126,8 +138,11 @@ SSB_LAI$year[SSB_LAI$component == "Downs"][c(30, 40, 44)]
 ## Plot change-points
 
 ```{r}
+### Load functions from "functions"
+source("R/functions.R")
+
 ### Shetland Orkney
-plot_SSB_cpt_SHOR <- plot_SSB_cpt(data = SSB_LAI[SSB_LAI$component == "Shetland_Orkney", ], 
+plot_SSB_cpt_SHOR <- plot_SSB_cpt(data = Herring_ShOr, 
               changepoints = c(1983, 1990, 2005, 2014),
               component = "Shetland / Orkney", 
               SSB_column = "SSB_component", 
@@ -137,7 +152,7 @@ plot_SSB_cpt_SHOR <- plot_SSB_cpt(data = SSB_LAI[SSB_LAI$component == "Shetland_
 plot_SSB_cpt_SHOR
 
 ### Buchan
-plot_SSB_cpt_Buchan <- plot_SSB_cpt(data = SSB_LAI[SSB_LAI$component == "Buchan", ], 
+plot_SSB_cpt_Buchan <- plot_SSB_cpt(data = Herring_Buchan, 
               changepoints = c(1989, 2009, 2018),
               component = "Buchan", 
               SSB_column = "SSB_component", 
@@ -147,7 +162,7 @@ plot_SSB_cpt_Buchan <- plot_SSB_cpt(data = SSB_LAI[SSB_LAI$component == "Buchan"
 plot_SSB_cpt_Buchan
 
 ### Banks
-plot_SSB_cpt_Banks <- plot_SSB_cpt(data = SSB_LAI[SSB_LAI$component == "Banks", ], 
+plot_SSB_cpt_Banks <- plot_SSB_cpt(data = Herring_Banks, 
               changepoints = c(1982, 1990, 2000, 2018),
               ribbon_colors = c("steelblue", "orange", "purple", "lightgreen", "grey"),
               vline_colors = c("black", "black", "black", "grey"),
@@ -159,7 +174,7 @@ plot_SSB_cpt_Banks <- plot_SSB_cpt(data = SSB_LAI[SSB_LAI$component == "Banks", 
 plot_SSB_cpt_Banks
 
 ### Downs
-plot_SSB_cpt_Downs <- plot_SSB_cpt(data = SSB_LAI[SSB_LAI$component == "Downs", ], 
+plot_SSB_cpt_Downs <- plot_SSB_cpt(data = Herring_Downs, 
               changepoints = c(1987, 2001, 2011, 2021),
               ribbon_colors = c("grey", "steelblue", "orange", "purple", "grey"),
               vline_colors = c("grey", "black", "black","grey"),
@@ -183,4 +198,106 @@ ggsave(filename = file.path("plots/", "SSB_cpt_components.png"),
        width = 15,
        height = 10,
        dpi = 300)
+```
+
+# Hysteresis
+
+## Analysis
+
+```{r}
+### Examine for time lag
+ccf(Herring_ShOr$SSB_component, Herring_ShOr$F, type = "correlation") # 1 year lag
+
+ccf(Herring_Buchan$SSB_component, Herring_Buchan$F, type = "correlation") # 3 years lag
+
+ccf(Herring_Banks$SSB_component, Herring_Banks$F, type = "correlation") # 5 years lag
+
+ccf(Herring_Downs$SSB_component, Herring_Downs$F, type = "correlation") # 1 year lag
+
+### Call function "breakpoint_analysis"
+brkpt_results_list <- list()
+brkpt_results_list$ShOr <- breakpoint_analysis(Herring_ShOr, "SSB_component", "F", "year", 
+                                    lag_years = 1, 
+                                    region_name = "Shetland Orkney",
+                                    dataset_name = "Herring_ShOr")
+
+# Optimal number of breaks: 5 
+# Best breakpoint F values:
+# 0.28 0.29 0.189 0.29 0.22 
+# Best breakpoint years:
+# 1983, 1990, 1997, 2005, 2015 
+
+brkpt_results_list$Buchan <- breakpoint_analysis(Herring_Buchan, "SSB_component", "F", "year", 
+                                    lag_years = 3, 
+                                    region_name = "Buchan",
+                                    dataset_name = "Herring_Buchan")
+# Optimal number of breaks: 3
+# Best breakpoint F values:
+# 0.29 0.189 0.184 
+# Best breakpoint years:
+# 1990, 1997, 2012 
+
+brkpt_results_list$Banks <- breakpoint_analysis(Herring_Banks, "SSB_component", "F", "year", 
+                                    lag_years = 5, 
+                                    region_name = "Banks",
+                                    dataset_name = "Herring_Banks")
+# Optimal number of breaks: 2
+# Best breakpoint F values:
+# 0.39 0.29 
+# Best breakpoint years:
+# 1988, 2005 
+
+brkpt_results_list$Downs <- breakpoint_analysis(Herring_Downs, "SSB_component", "F", "year", 
+                                    lag_years = 1, 
+                                    region_name = "Downs",
+                                    dataset_name = "Herring_Downs")
+# Optimal number of breaks: 4 
+# Best breakpoint F values:
+# 0.41 0.171 0.073 0.24 
+# Best breakpoint years:
+# 1987, 2002, 2009, 2016 
+```
+
+## Plotting
+
+```{r}
+### Call function plot_hysteresis 
+plot_hysteresis_ShOr <- plot_hysteresis(Herring_ShOr, brkpt_results_list$ShOr$break_years, "Shetland Orkneys", msy_btrigger = 11)
+plot_hysteresis_ShOr
+
+plot_hysteresis_Buchan <- plot_hysteresis(Herring_Buchan, brkpt_results_list$Buchan$break_years, "Shetland Orkneys", msy_btrigger = 11)
+plot_hysteresis_Buchan
+
+plot_hysteresis_Banks <- plot_hysteresis(Herring_Banks, brkpt_results_list$Banks$break_years, "Shetland Orkneys", msy_btrigger = 11)
+plot_hysteresis_Banks
+
+plot_hysteresis_Downs <- plot_hysteresis(Herring_Downs, brkpt_results_list$Downs$break_years, "Shetland Orkneys", msy_btrigger = 11)
+plot_hysteresis_Downs
+```
+
+### save plot
+
+```{r} ggsave(filename = file.path("plots/", "hysteresis_full.png"),        plot = plot_hysteresis_full,        bg = "white",        width = 10,        height = 10,        dpi = 300)}
+```
+
+# SRR Non-Stationary
+
+## Analysis
+
+```{r} ### Run model comparison from model_comp_functions.R  source("R/model_comp_functions.R")  SSR_analysis <- run_srr_analysis(     data_for_srr = Herring_full[-(79:78),],    recruit_col = "R",    ssb_col = "SSB",    opt_brks_val = 4)  print(SSR_analysis$comparison_table)  #### strucchange model shows lowest RMSE  #### Strucchange breakpoint analysis bpts_SRR <- strucchange :: breakpoints(R ~ SSB, data = Herring_full) bpts_SRR_sum <- summary(bpts_SRR) opt_brks_SRR <- opt_bpts(bpts_SRR_sum$RSS["BIC",]) opt_brks_SRR #2 bpts2_SRR <- strucchange:: breakpoints(bpts_SRR, breaks = opt_brks[1]) bpts2_SRR <-strucchange :: breakpoints(bpts_SRR, breaks = opt_brks_SRR)  best_brk_SRR <- Herring_full$SSB[bpts2_SRR$breakpoints] best_brk_SRR #### 264793.8,  2391903.7 best_brk_years_SRR <- Herring_full$year[bpts2_SRR$breakpoints] best_brk_years_SRR #### 1981,      2002}
+```
+
+## Plotting
+
+```{r} plot_SRR_full <- plot_SRR(Herring_full, best_brk_years_SRR, "Full Stock", "strucchange") plot_SRR_full}
+```
+
+#### save plot
+
+```{r} ggsave(filename = file.path("plots/", "SRR_full.png"),        plot = plot_SRR_full,        bg = "white",        width = 10,        height = 10,        dpi = 300)}
+```
+
+# tGAM
+
+```{r} ### Merge env data to fishing tGAM_data <- merge(Herring_full, env_df_full,by = "year") %>%   select(year, SSB_lag, R, Mean_SST, Mean_SBT, Mean_SSS)  ### Run threshold gam function from "functions" with each variable run_threshold_gam(tGAM_data, "R", "SSB_lag", "Mean_SST", "year") # FALSE, 10.87623 run_threshold_gam(tGAM_data, "R", "SSB_lag", "Mean_SBT", "year") # FALSE, 8.561897 run_threshold_gam(tGAM_data, "R", "SSB_lag", "Mean_SSS", "year") # FALSE, 34.42214  #### No significant threshhold effect found}
 ```
