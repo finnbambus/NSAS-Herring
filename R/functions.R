@@ -165,6 +165,149 @@ plot_environmental_ts <- function(data_list, plot_area_title) {
 
 # Functions for "data_analysis.Rmd"
 #--------------------------------------------------------------------------------------
+## Analyse SSB change-points
+#--------------------------------------------------------------------------------------
+
+changepoint_analysis <- function(data, 
+                                 ssb_col = "SSB_component", 
+                                 year_col = "year",
+                                 region_name = "Region",
+                                 Q = 6,
+                                 bcp_threshold = 0.7,
+                                 consensus_tolerance = 1,
+                                 min_years_between = 5,
+                                 plot_results = TRUE) {
+  
+  # Print region being analyzed
+  cat("=== Changepoint Analysis for", region_name, "===\n")
+  
+  # Validate inputs
+  if (!ssb_col %in% names(data)) {
+    stop("SSB column '", ssb_col, "' not found in data")
+  }
+  if (!year_col %in% names(data)) {
+    stop("Year column '", year_col, "' not found in data")
+  }
+  
+  # Remove rows with missing values
+  analysis_data <- data[complete.cases(data[c(ssb_col, year_col)]), ]
+  
+  if(nrow(analysis_data) < nrow(data)) {
+    cat("# Removed", nrow(data) - nrow(analysis_data), "rows with missing values\n")
+  }
+  
+  cat("# Data range:", range(analysis_data[[year_col]])[1], "-", 
+      range(analysis_data[[year_col]])[2], "\n")
+  cat("# Analysis parameters: Q =", Q, ", BCP threshold =", bcp_threshold, "\n")
+  
+  # CPT Analysis (BinSeg method)
+  cat("\n## CPT Analysis (BinSeg)\n")
+  ssbcpts <- cpt.mean(data = analysis_data[[ssb_col]], method = "BinSeg", Q = Q)
+  cpt_indices <- cpts(ssbcpts)
+  cpt_years <- analysis_data[[year_col]][cpt_indices]
+  
+  cat("# CPT changepoint indices:", paste(cpt_indices, collapse = ", "), "\n")
+  cat("# CPT changepoint years:", paste(cpt_years, collapse = ", "), "\n")
+  
+  if(plot_results) {
+    plot(ssbcpts, type = "l", cpt.col = "navyblue", 
+         xlab = "Index", pt.width = 4,
+         main = paste("CPT Analysis -", region_name))
+  }
+  
+  # BCP Analysis
+  cat("\n## BCP Analysis\n")
+  bcp.ssb <- bcp(analysis_data[[ssb_col]])
+  bcp_indices <- which(bcp.ssb$posterior.prob >= bcp_threshold)
+  bcp_years <- analysis_data[[year_col]][bcp_indices]
+  
+  cat("# BCP changepoint indices:", paste(bcp_indices, collapse = ", "), "\n")
+  cat("# BCP changepoint years:", paste(bcp_years, collapse = ", "), "\n")
+  
+  if(plot_results) {
+    plot(bcp.ssb, main = paste("BCP Analysis -", region_name))
+  }
+  
+  # Consensus Analysis
+  cat("\n## Consensus Analysis\n")
+  consensus_years <- c()
+  
+  # Find consensus points (within tolerance)
+  for (cpt_year in cpt_years) {
+    if (any(abs(bcp_years - cpt_year) <= consensus_tolerance)) {
+      consensus_years <- c(consensus_years, cpt_year)
+    }
+  }
+  
+  # Apply minimum spacing rule
+  if (length(consensus_years) > 1) {
+    consensus_years <- sort(consensus_years)
+    filtered_consensus <- consensus_years[1]
+    
+    for (i in 2:length(consensus_years)) {
+      if (consensus_years[i] - tail(filtered_consensus, 1) >= min_years_between) {
+        filtered_consensus <- c(filtered_consensus, consensus_years[i])
+      }
+    }
+    consensus_years <- filtered_consensus
+  }
+  
+  # Identify method-specific changepoints
+  cpt_only_years <- setdiff(cpt_years, consensus_years)
+  bcp_only_years <- setdiff(bcp_years, consensus_years)
+  
+  cat("# Consensus changepoints (±", consensus_tolerance, "yr, min", min_years_between, "yr apart):", 
+      paste(consensus_years, collapse = ", "), "\n")
+  
+  if (length(cpt_only_years) > 0) {
+    cat("# CPT only:", paste(cpt_only_years, collapse = ", "), "\n")
+  }
+  if (length(bcp_only_years) > 0) {
+    cat("# BCP only:", paste(bcp_only_years, collapse = ", "), "\n")
+  }
+  
+  # Create results structure
+  results <- list(
+    region = region_name,
+    parameters = list(
+      Q = Q,
+      bcp_threshold = bcp_threshold,
+      consensus_tolerance = consensus_tolerance,
+      min_years_between = min_years_between
+    ),
+    data_info = list(
+      n_observations = nrow(analysis_data),
+      year_range = range(analysis_data[[year_col]]),
+      ssb_range = range(analysis_data[[ssb_col]], na.rm = TRUE)
+    ),
+    cpt_analysis = list(
+      model = ssbcpts,
+      changepoint_indices = cpt_indices,
+      changepoint_years = cpt_years,
+      n_changepoints = length(cpt_years)
+    ),
+    bcp_analysis = list(
+      model = bcp.ssb,
+      changepoint_indices = bcp_indices,
+      changepoint_years = bcp_years,
+      n_changepoints = length(bcp_years),
+      threshold_used = bcp_threshold
+    ),
+    consensus = list(
+      changepoint_years = consensus_years,
+      cpt_only_years = cpt_only_years,
+      bcp_only_years = bcp_only_years,
+      n_consensus = length(consensus_years),
+      criteria = paste("Both methods ±", consensus_tolerance, "year, min", min_years_between, "years between points")
+    )
+  )
+  
+  cat("\n")
+  return(results)
+}
+
+
+#--------------------------------------------------------------------------------------
 ## Plot SSB change-points
 #--------------------------------------------------------------------------------------
 
@@ -262,18 +405,11 @@ opt_bpts <- function(x) {
 breakpoint_analysis <- function(data, ssb_col, f_col, year_col, 
                                 lag_years = 1, 
                                 region_name = "Region", 
-                                plot_breakpoints = TRUE, 
-                                dataset_name = NULL) {
+                                plot_breakpoints = TRUE) {
   
   # Print region being analyzed
   cat("=== Analysis for", region_name, "===\n")
   cat("# Using", lag_years, "year lag\n")
-  
-  # Create time-lag object using specified lag
-  data$SSB_lag <- lag(data[[ssb_col]], lag_years)
-  
-  if (!is.null(dataset_name)) {
-    assign(dataset_name, data, envir = parent.frame())}
   
   # Remove rows with missing values for analysis
   analysis_data <- data[complete.cases(data[c(ssb_col, f_col, "SSB_lag")]), ]
@@ -344,7 +480,10 @@ breakpoint_analysis <- function(data, ssb_col, f_col, year_col,
 plot_hysteresis <- function(data, break_years, component,
                             msy_btrigger = 1130747, 
                             fmsy = 0.32,
-                            colors = c("steelblue", "darkorange", "purple", "lightgreen", "indianred")) {
+                            show_msy_btrigger = TRUE,  # New parameter to control MSY B trigger display
+                            show_fmsy = TRUE,           # Optional: also control F_MSY display
+                            colors = c("steelblue", "darkorange", "purple", "lightgreen", "indianred"),
+                            nudge_params = NULL) {      # New parameter for nudge parameters
   
   msy_btrigger <- as.numeric(msy_btrigger)
   fmsy <- as.numeric(fmsy)
@@ -353,10 +492,21 @@ plot_hysteresis <- function(data, break_years, component,
   n_breaks <- length(break_years)
   n_phases <- n_breaks + 1
   
+  # Set default nudge parameters if not provided
+  if (is.null(nudge_params)) {
+    nudge_params <- list(
+      list(nudge_y = 0, nudge_x = 0.2),
+      list(nudge_y = -0.5, nudge_x = 0.2),
+      list(nudge_y = 0, nudge_x = -0.2),
+      list(nudge_y = 0, nudge_x = 0.2)
+    )
+  }
+  
   # Create phase assignment vector
   phase_assignment <- rep(1, nrow(data))
   for (i in 1:n_breaks) {
-    phase_assignment[data$year > break_years[i]] <- i + 1}
+    phase_assignment[data$year > break_years[i]] <- i + 1
+  }
   
   # Assign colors based on phase
   hyst_phases <- colors[phase_assignment]
@@ -372,36 +522,43 @@ plot_hysteresis <- function(data, break_years, component,
       phase_data_list[[i]] <- data %>% filter(year > break_years[n_breaks])
     } else {
       # Middle phases: between break years
-      phase_data_list[[i]] <- data %>% filter(year > break_years[i-1] & year <= break_years[i])}}
+      phase_data_list[[i]] <- data %>% filter(year > break_years[i-1] & year <= break_years[i])
+    }
+  }
   
-  # Create the plot
+  # Create the base plot
   p <- ggplot(data = data, aes(x = F, y = SSB_lag/1000000)) +
     geom_path(colour = "grey") +
-    geom_hline(yintercept = msy_btrigger/1000000, linetype = "dashed", color = "gray30") +
-    geom_vline(xintercept = fmsy, linetype = "dashed", color = "gray30") +
-    geom_label(x = fmsy, y = 0.5, label = expression("F"[MSY]), 
-               color = "gray30", size = 3.5) +
-    geom_label(x = 1, y = msy_btrigger/1000000, label = expression("MSY B"[trigger]), 
-               color = "gray30", size = 3.5, fontface = "bold") +
     geom_point(colour = hyst_phases) +
     labs(title = paste("Hysteresis in", component), x = "F", y = "SSB in millions") +
     theme_minimal() +
     theme(plot.title = element_text(hjust = 0.5))
   
+  # Add MSY B trigger line and label only if show_msy_btrigger is TRUE
+  if (show_msy_btrigger) {
+    p <- p + 
+      geom_hline(yintercept = msy_btrigger/1000000, linetype = "dashed", color = "gray30") +
+      geom_label(x = 1, y = msy_btrigger/1000000, label = expression("MSY B"[trigger]), 
+                 color = "gray30", size = 3.5, fontface = "bold")
+  }
+  
+  # Add F_MSY line and label only if show_fmsy is TRUE
+  if (show_fmsy) {
+    p <- p + 
+      geom_vline(xintercept = fmsy, linetype = "dashed", color = "gray30") +
+      geom_label(x = fmsy, y = 0.5, label = expression("F"[MSY]), 
+                 color = "gray30", size = 3.5)
+  }
+  
   # Add geom_smooth for each phase (only if data exists)
   for (i in 1:n_phases) {
     if (nrow(phase_data_list[[i]]) > 0) {
       p <- p + geom_smooth(data = phase_data_list[[i]], aes(x = F, y = SSB_lag/1000000),
-                           method = "lm", colour = colors[i])}}
+                           method = "lm", colour = colors[i])
+    }
+  }
   
   # Add text labels for break years (only for existing break years)
-  # Define nudge parameters for each break year position
-  nudge_params <- list(
-    list(nudge_y = 0, nudge_x = 0.2),
-    list(nudge_y = -0.5, nudge_x = 0.2),
-    list(nudge_y = 0, nudge_x = -0.2),
-    list(nudge_y = 0, nudge_x = 0.2))
-  
   for (i in 1:n_breaks) {
     break_year_data <- data %>% filter(year == break_years[i])
     if (nrow(break_year_data) > 0) {
@@ -410,381 +567,189 @@ plot_hysteresis <- function(data, break_years, component,
       
       p <- p + geom_text_repel(data = break_year_data, aes(label = year),
                                point.padding = 0.2, nudge_y = nudge_y, nudge_x = nudge_x,
-                               size = 3, col = "black", segment.size = 0.2)}}
+                               size = 3, col = "black", segment.size = 0.2)
+    }
+  }
+  
+  # Add labels for first and last years
+  # Use the last element of nudge_params for start/end years, or default values
+  end_nudge_y <- if (length(nudge_params) >= 5) nudge_params[[5]]$nudge_y else 0
+  end_nudge_x <- if (length(nudge_params) >= 5) nudge_params[[5]]$nudge_x else -0.1
+  
   p <- p + geom_text_repel(data = data[c(1, length(data$year)),], aes(label = year),
-                           point.padding = 0.2, nudge_y = 0, nudge_x = -0.1,
+                           point.padding = 0.2, nudge_y = end_nudge_y, nudge_x = end_nudge_x,
                            size = 3, col = "black", segment.size = 0.2)
   
-  return(p)}
+  return(p)
+}
 
 
 #--------------------------------------------------------------------------------------
-## Test different Models
+## Extract SSR Breakpoints
 #--------------------------------------------------------------------------------------
 
 srr_breakpoint_analysis <- function(data, ssb_col = "SSB", r_col = "R", year_col = "year",
-                                    region_name = "Region", plot_breakpoints = TRUE) {
+                                    region_name = "Region", plot_breakpoints = TRUE, 
+                                    method = "strucchange", initial_psi = NULL) {
   
   # Print region being analyzed
   cat("=== SRR Analysis for", region_name, "===\n")
+  cat("# Method:", method, "\n")
   
   # Remove rows with missing values for analysis
   analysis_data <- data[complete.cases(data[c(ssb_col, r_col, year_col)]), ]
   
   if(nrow(analysis_data) < nrow(data)) {
-    cat("# Removed", nrow(data) - nrow(analysis_data), "rows with missing values\n")}
+    cat("# Removed", nrow(data) - nrow(analysis_data), "rows with missing values\n")
+  }
   
-  # Break-point analysis for Stock-Recruitment Relationship
-  bpts_SRR <- strucchange::breakpoints(analysis_data[[r_col]] ~ analysis_data[[ssb_col]])
-  
-  if(plot_breakpoints) {
-    plot(bpts_SRR, main = paste("SRR Breakpoints for", region_name))}
-  
-  # Get summary and find optimal breaks
-  bpts_SRR_sum <- summary(bpts_SRR)
-  opt_brks_SRR <- opt_bpts(bpts_SRR_sum$RSS["BIC",])
-  
-  cat("# Optimal number of breaks:", opt_brks_SRR[1], "\n")
-  
-  # Get breakpoints with optimal number of breaks
-  bpts2_SRR <- strucchange::breakpoints(bpts_SRR, breaks = opt_brks_SRR[1])
-  best_brk_SRR <- analysis_data[[ssb_col]][bpts2_SRR$breakpoints]
-  
-  cat("# Best breakpoint SSB values:\n")
-  cat("#", paste(round(best_brk_SRR, 1), collapse = ", "), "\n")
-  
-  # Get breakpoint years
-  best_brk_years_SRR <- analysis_data[[year_col]][bpts2_SRR$breakpoints]
-  
-  cat("# Best breakpoint years:\n") 
-  cat("#", paste(best_brk_years_SRR, collapse = ", "), "\n")
-  
-  # Create stock-recruitment plot with breakpoints
-  par(mfrow = c(1,1))
-  ci_mod_SRR <- confint(bpts_SRR, breaks = opt_brks_SRR[1])
-  
-  plot(analysis_data[[r_col]] ~ analysis_data[[ssb_col]], type = "p",
-       xlab = "SSB", ylab = "Recruitment (R)",
-       main = paste("Stock-Recruitment Relationship with Breakpoints -", region_name))
-  
-  # Add confidence interval lines
-  for (i in 1:opt_brks_SRR[1]) {
-    abline(v = analysis_data[[ssb_col]][ci_mod_SRR$confint[i,2]], col = "blue", lwd = 2)
-    abline(v = analysis_data[[ssb_col]][ci_mod_SRR$confint[i,1]], col = "red", lty = 3)
-    abline(v = analysis_data[[ssb_col]][ci_mod_SRR$confint[i,3]], col = "red", lty = 3)}
-  
-  legend("topright", legend = c("Best estimate", "Confidence limits"), 
-         col = c("blue", "red"), lty = c(1, 3), lwd = c(2, 1))
-  
-  # Return results as a list
+  # Initialize results list
   results <- list(
     region = region_name,
-    breakpoints = bpts2_SRR,
-    optimal_breaks = opt_brks_SRR[1],
-    break_ssb_values = best_brk_SRR,
-    break_years = best_brk_years_SRR,
-    confidence_intervals = ci_mod_SRR,
-    summary = bpts_SRR_sum)
+    method = method,
+    data_used = analysis_data
+  )
   
-  cat("\n") # Add spacing between analyses
-  return(results)}
-
-
-#--------------------------------------------------------------------------------------
-## Test different Models
-#--------------------------------------------------------------------------------------
-
-# Helper Functions
-rmse <- function(sim, obs) {
-  sqrt(mean((obs - sim)^2, na.rm = TRUE))}
-
-check_data_columns <- function(data, required_cols) {
-  missing_cols <- setdiff(required_cols, names(data))
-  if (length(missing_cols) > 0) {
-    stop(paste("Missing columns in data:", paste(missing_cols, collapse = ", ")))}}
-
-fit_glm_models <- function(data, recruit_col = "R", ssb_col = "SSB") {
-  # Check if columns exist
-  check_data_columns(data, c(recruit_col, ssb_col))
-  
-  # Create formula
-  formula_str <- paste(recruit_col, "~", ssb_col)
-  formula_obj <- as.formula(formula_str)
-  
-  models <- list(
-    gaussian = glm(formula_obj, data = data, family = gaussian),
-    poisson = glm(formula_obj, data = data, family = poisson),
-    quasipoisson = glm(formula_obj, data = data, family = quasipoisson),
-    negbinom = MASS::glm.nb(formula_obj, data = data))
-  
-  # Calculate overdispersion
-  overdispersion <- sapply(models, function(m) {
-    deviance(m) / df.residual(m)})
-  
-  list(models = models, overdispersion = overdispersion)}
-
-# Main Modeling Functions
-
-# 1. Basic Models
-fit_independence_model <- function(data, recruit_col = "R", ssb_col = "ssb") {
-  check_data_columns(data, c(recruit_col, ssb_col))
-  
-  # Create formula and fit model
-  formula_str <- paste(recruit_col, "~", ssb_col)
-  model <- lm(as.formula(formula_str), data = data)
-  
-  list(model = model, fitted = fitted(model))}
-
-fit_beverton_holt <- function(data, recruit_col = "R", ssb_col = "ssb") {
-  check_data_columns(data, c(recruit_col, ssb_col))
-  
-  # Create formula for srStarts
-  formula_str <- paste(recruit_col, "~", ssb_col)
-  formula_obj <- as.formula(formula_str)
-  
-  tryCatch({
-    sv <- FSA::srStarts(formula_obj, data = data, type = "BevertonHolt")
-    bh <- FSA::srFuns("BevertonHolt")
+  if(method == "strucchange") {
+    # Original strucchange analysis
+    bpts_SRR <- strucchange::breakpoints(analysis_data[[r_col]] ~ analysis_data[[ssb_col]])
     
-    # Create log formula for nls
-    log_formula_str <- paste("log(", recruit_col, ") ~ log(bh(", ssb_col, ", a, b))")
-    model <- nls(as.formula(log_formula_str), data = data, start = sv)
+    if(plot_breakpoints) {
+      plot(bpts_SRR, main = paste("SRR Breakpoints for", region_name))
+    }
     
-    fitted_vals <- bh(data[[ssb_col]], a = coef(model))
-    r2 <- cor(fitted_vals, data[[recruit_col]])^2
+    # Get summary and find optimal breaks
+    bpts_SRR_sum <- summary(bpts_SRR)
+    opt_brks_SRR <- opt_bpts(bpts_SRR_sum$RSS["BIC",])
     
-    list(model = model, fitted = fitted_vals, r2 = r2)
-  }, error = function(e) {
-    warning(paste("Beverton-Holt model failed:", e$message))
-    list(model = NULL, fitted = NULL, r2 = NULL)})}
-
-fit_ricker <- function(data, recruit_col = "R", ssb_col = "ssb") {
-  check_data_columns(data, c(recruit_col, ssb_col))
-  
-  # Create formula for srStarts
-  formula_str <- paste(recruit_col, "~", ssb_col)
-  formula_obj <- as.formula(formula_str)
-  
-  tryCatch({
-    sv <- FSA::srStarts(formula_obj, data = data, type = "Ricker")
-    rckr <- FSA::srFuns("Ricker")
+    cat("# Optimal number of breaks:", opt_brks_SRR[1], "\n")
     
-    # Create log formula for nls
-    log_formula_str <- paste("log(", recruit_col, ") ~ log(rckr(", ssb_col, ", a, b))")
-    model <- nls(as.formula(log_formula_str), data = data, start = sv)
+    # Get breakpoints with optimal number of breaks
+    bpts2_SRR <- strucchange::breakpoints(bpts_SRR, breaks = opt_brks_SRR[1])
+    best_brk_SRR <- analysis_data[[ssb_col]][bpts2_SRR$breakpoints]
     
-    fitted_vals <- rckr(data[[ssb_col]], a = coef(model))
+    cat("# Best breakpoint SSB values:\n")
+    cat("#", paste(round(best_brk_SRR, 1), collapse = ", "), "\n")
     
-    list(model = model, fitted = fitted_vals)
-  }, error = function(e) {
-    warning(paste("Ricker model failed:", e$message))
-    list(model = NULL, fitted = NULL)})}
-
-# 2. Segmented Models
-fit_segmented_models <- function(data, recruit_col = "R", ssb_col = "SSB") {
-  check_data_columns(data, c(recruit_col, ssb_col))
-  
-  mean_ssb <- mean(data[[ssb_col]], na.rm = TRUE)
-  mean_ssb_log <- mean(log(data[[ssb_col]]), na.rm = TRUE)
-  
-  results <- list()
-  
-  # Regular segmented
-  tryCatch({
-    formula_str <- paste(recruit_col, "~", ssb_col)
-    base_model <- lm(as.formula(formula_str), data = data)
-    seg_formula_str <- paste("~", ssb_col)
+    # Get breakpoint years
+    best_brk_years_SRR <- analysis_data[[year_col]][bpts2_SRR$breakpoints]
     
-    seg_regular <- segmented::segmented(
-      base_model, 
-      seg.Z = as.formula(seg_formula_str), 
-      psi = mean_ssb)
+    cat("# Best breakpoint years:\n") 
+    cat("#", paste(best_brk_years_SRR, collapse = ", "), "\n")
     
-    results$regular <- list(
-      model = seg_regular,
-      fitted = seg_regular$fitted.values,
-      breakpoint = seg_regular$psi[2],
-      breakpoint_se = seg_regular$psi[3])
-  }, error = function(e) {
-    warning(paste("Regular segmented model failed:", e$message))
-    results$regular <- list(model = NULL, fitted = NULL, breakpoint = NULL, breakpoint_se = NULL)})
-  
-  # Log-transformed segmented
-  tryCatch({
-    data$r_log <- log(data[[recruit_col]])
-    data$ssb_log <- log(data[[ssb_col]])
+    # Create stock-recruitment plot with breakpoints
+    par(mfrow = c(1,1))
+    ci_mod_SRR <- confint(bpts_SRR, breaks = opt_brks_SRR[1])
     
-    base_model_log <- lm(r_log ~ ssb_log, data = data)
-    seg_log <- segmented::segmented(
-      base_model_log, 
-      seg.Z = ~ssb_log, 
-      psi = mean_ssb_log)
+    plot(analysis_data[[r_col]] ~ analysis_data[[ssb_col]], type = "p",
+         xlab = "SSB", ylab = "Recruitment (R)",
+         main = paste("Stock-Recruitment Relationship with Breakpoints -", region_name))
     
-    results$log <- list(
-      model = seg_log,
-      fitted = seg_log$fitted.values,
-      breakpoint = seg_log$psi[2],
-      breakpoint_se = seg_log$psi[3])
-  }, error = function(e) {
-    warning(paste("Log segmented model failed:", e$message))
-    results$log <- list(model = NULL, fitted = NULL, breakpoint = NULL, breakpoint_se = NULL)})
-  
-  # Negative binomial segmented
-  tryCatch({
-    # First fit regular GLM with quasipoisson (handles overdispersion)
-    formula_str <- paste(recruit_col, "~", ssb_col)
-    base_model_qpois <- glm(as.formula(formula_str), data = data, family = quasipoisson)
-    seg_formula_str <- paste("~", ssb_col)
+    # Add confidence interval lines
+    for (i in 1:opt_brks_SRR[1]) {
+      abline(v = analysis_data[[ssb_col]][ci_mod_SRR$confint[i,2]], col = "blue", lwd = 2)
+      abline(v = analysis_data[[ssb_col]][ci_mod_SRR$confint[i,1]], col = "red", lty = 3)
+      abline(v = analysis_data[[ssb_col]][ci_mod_SRR$confint[i,3]], col = "red", lty = 3)
+    }
     
-    seg_qpois <- segmented::segmented(
-      base_model_qpois, 
-      seg.Z = as.formula(seg_formula_str), 
-      psi = mean_ssb)
+    legend("topright", legend = c("Best estimate", "Confidence limits"), 
+           col = c("blue", "red"), lty = c(1, 3), lwd = c(2, 1))
     
-    results$negbinom <- list(
-      model = seg_qpois,
-      fitted = seg_qpois$fitted.values,
-      breakpoint = seg_qpois$psi[2],
-      breakpoint_se = seg_qpois$psi[3],
-      note = "Using quasipoisson instead of negative binomial for segmented model")
-  }, error = function(e) {
-    warning(paste("Quasipoisson segmented model failed:", e$message))
+    # Add strucchange-specific results to output
+    results <- c(results, list(
+      breakpoints = bpts2_SRR,
+      optimal_breaks = opt_brks_SRR[1],
+      break_ssb_values = best_brk_SRR,
+      break_years = best_brk_years_SRR,
+      confidence_intervals = ci_mod_SRR,
+      summary = bpts_SRR_sum
+    ))
     
-    # Fallback: try with regular gaussian segmented
+  } else if(method == "segmented") {
+    # Segmented model analysis
+    cat("# Running segmented model analysis\n")
+    
+    # Set initial psi value
+    if(is.null(initial_psi)) {
+      initial_psi <- mean(analysis_data[[ssb_col]], na.rm = TRUE)
+      cat("# Using mean SSB as initial psi:", round(initial_psi, 2), "\n")
+    } else {
+      cat("# Using provided initial psi:", round(initial_psi, 2), "\n")
+    }
+    
+    # Fit linear model first
+    lm_model <- lm(formula(paste(r_col, "~", ssb_col)), data = analysis_data)
+    
+    # Fit segmented model
     tryCatch({
-      formula_str <- paste(recruit_col, "~", ssb_col)
-      base_model_gaus <- lm(as.formula(formula_str), data = data)
-      seg_formula_str <- paste("~", ssb_col)
+      seg_formula <- formula(paste("~", ssb_col))
+      seg_model <- segmented::segmented(lm_model, seg.Z = seg_formula, psi = initial_psi)
       
-      seg_gaus <- segmented::segmented(
-        base_model_gaus, 
-        seg.Z = as.formula(seg_formula_str), 
-        psi = mean_ssb)
+      # Extract results
+      seg_summary <- summary(seg_model)
+      breakpoint_ssb <- seg_model$psi[2]  # breakpoint estimate
+      breakpoint_se <- seg_model$psi[3]   # standard error
       
-      results$negbinom <- list(
-        model = seg_gaus,
-        fitted = seg_gaus$fitted.values,
-        breakpoint = seg_gaus$psi[2],
-        breakpoint_se = seg_gaus$psi[3],
-        note = "Using gaussian fallback for segmented model")
-    }, error = function(e2) {
-      warning(paste("Gaussian segmented fallback also failed:", e2$message))
-      results$negbinom <- list(model = NULL, fitted = NULL, breakpoint = NULL, breakpoint_se = NULL)})})
-  
-  return(results)}
-
-# 3. Structural Change Model
-fit_strucchange <- function(data, recruit_col = "R", ssb_col = "SSB") {
-  check_data_columns(data, c(recruit_col, ssb_col))
-  
-  tryCatch({
-    formula_str <- paste(recruit_col, "~", ssb_col)
-    bpts <- strucchange::breakpoints(as.formula(formula_str), data = data)
-    bpts_sum <- summary(bpts)
-    
-    # Find optimal breakpoints
-    if (length(opt_brks) > 0 && opt_brks[1] > 0) {
-      bpts2 <- strucchange::breakpoints(bpts, breaks = opt_brks)
-      best_brk <- data[[ssb_col]][bpts2$breakpoints]
+      # Find corresponding year for breakpoint
+      breakpoint_year <- analysis_data[[year_col]][which.min(abs(analysis_data[[ssb_col]] - breakpoint_ssb))]
       
-      # Fit segmented model (simplified for 2 breakpoints)
-      if (length(best_brk) >= 2) {
-        # Create the complex formula
-        formula_complex <- as.formula(paste(
-          recruit_col, "~", ssb_col, "* (", ssb_col, "<=", best_brk[1], ") +",
-          ssb_col, "* (", ssb_col, ">=", best_brk[1], "&", ssb_col, "<=", best_brk[2], ") +",
-          ssb_col, "* (", ssb_col, ">=", best_brk[2], ")"))
+      cat("# Segmented model breakpoint:\n")
+      cat("# SSB breakpoint:", round(breakpoint_ssb, 1), "±", round(breakpoint_se, 1), "\n")
+      cat("# Approximate year:", breakpoint_year, "\n")
+      
+      # Create plot with segmented fit
+      if(plot_breakpoints) {
+        plot(analysis_data[[ssb_col]], analysis_data[[r_col]], type = "p",
+             xlab = "SSB", ylab = "Recruitment (R)",
+             main = paste("Segmented Stock-Recruitment Relationship -", region_name))
         
-        model <- lm(formula_complex, data = data)
+        # Add fitted line
+        plot(seg_model, add = TRUE, col = "red", lwd = 2)
         
-        list(model = model, breakpoints = best_brk, bpts_obj = bpts)
-      } else {
-        list(model = NULL, breakpoints = NULL, bpts_obj = bpts)}
-    } else {
-      list(model = NULL, breakpoints = NULL, bpts_obj = bpts)}
-  }, error = function(e) {
-    warning(paste("Structural change model failed:", e$message))
-    list(model = NULL, breakpoints = NULL, bpts_obj = NULL)})}
-
-# Model Comparison Function ----
-compare_models <- function(models_list, observed_data) {
-  model_names <- names(models_list)
-  n_models <- length(models_list)
-  
-  # Initialize comparison dataframe
-  comparison <- data.frame(
-    Model = model_names,
-    AIC = numeric(n_models),
-    RMSE = numeric(n_models),
-    stringsAsFactors = FALSE)
-  
-  for (i in seq_along(models_list)) {
-    model_info <- models_list[[i]]
+        # Add breakpoint line
+        abline(v = breakpoint_ssb, col = "blue", lwd = 2, lty = 2)
+        
+        # Add confidence interval for breakpoint
+        abline(v = breakpoint_ssb - 1.96 * breakpoint_se, col = "red", lty = 3)
+        abline(v = breakpoint_ssb + 1.96 * breakpoint_se, col = "red", lty = 3)
+        
+        legend("topright", 
+               legend = c("Segmented fit", "Breakpoint", "95% CI"), 
+               col = c("red", "blue", "red"), 
+               lty = c(1, 2, 3), 
+               lwd = c(2, 2, 1))
+      }
+      
+      # Add segmented-specific results to output
+      results <- c(results, list(
+        segmented_model = seg_model,
+        linear_model = lm_model,
+        breakpoint_ssb = breakpoint_ssb,
+        breakpoint_se = breakpoint_se,
+        breakpoint_year = breakpoint_year,
+        fitted_values = seg_model$fitted.values,
+        coefficients = coef(seg_model),
+        summary = seg_summary,
+        initial_psi = initial_psi
+      ))
+      
+    }, error = function(e) {
+      cat("# Error in segmented analysis:", e$message, "\n")
+      cat("# Try adjusting the initial_psi value\n")
+      
+      results <<- c(results, list(
+        error = e$message,
+        initial_psi = initial_psi
+      ))
+    })
     
-    if (!is.null(model_info) && !is.null(model_info$model) && !is.null(model_info$fitted)) {
-      tryCatch({
-        comparison$AIC[i] <- AIC(model_info$model)
-        comparison$RMSE[i] <- rmse(model_info$fitted, observed_data)
-      }, error = function(e) {
-        comparison$AIC[i] <- NA
-        comparison$RMSE[i] <- NA})
-    } else {
-      comparison$AIC[i] <- NA
-      comparison$RMSE[i] <- NA}}
+  } else {
+    stop("Method must be either 'strucchange' or 'segmented'")
+  }
   
-  return(comparison)}
-
-# Main Analysis Workflow ----
-run_srr_analysis <- function(SSB_lag_data, SSB_data, 
-                             lag_recruit_col = "R", lag_SSB_col = "ssb",
-                             norm_recruit_col = "R", norm_SSB_col = "SSB") {
-  
-  cat("Starting SRR analysis...\n")
-  
-  # Initialize results
-  models <- list()
-  
-  # Basic models (using SSB_lag_data)
-  cat("Fitting independence model...\n")
-  models$independence <- fit_independence_model(SSB_lag_data, lag_recruit_col, lag_SSB_col)
-  
-  cat("Fitting Beverton-Holt model...\n")
-  models$beverton_holt <- fit_beverton_holt(SSB_lag_data, lag_recruit_col, lag_SSB_col)
-  
-  cat("Fitting Ricker model...\n")
-  models$ricker <- fit_ricker(SSB_lag_data, lag_recruit_col, lag_SSB_col)
-  
-  # Segmented models (using plaice data)
-  cat("Fitting segmented models...\n")
-  segmented_models <- fit_segmented_models(SSB_data, norm_recruit_col, norm_SSB_col)
-  models$segmented <- segmented_models
-  
-  # Structural change model
-  cat("Fitting structural change model...\n")
-  models$strucchange <- fit_strucchange(SSB_data, norm_recruit_col, norm_SSB_col)
-  
-  # GLM model comparison
-  cat("Comparing GLM models...\n")
-  glm_results <- fit_glm_models(SSB_data, norm_recruit_col, norm_SSB_col)
-  
-  # Model comparison
-  models_for_comparison <- list(
-    independence = models$independence,
-    beverton_holt = models$beverton_holt,
-    ricker = models$ricker,
-    segmented_regular = segmented_models$regular,
-    segmented_log = segmented_models$log,
-    segmented_negbi = segmented_models$negbinom)
-  
-  cat("Comparing models...\n")
-  comparison <- compare_models(models_for_comparison, SSB_data[[norm_recruit_col]])
-  
-  cat("Analysis complete!\n")
-  
-  return(list(
-    models = models,
-    glm_results = glm_results,
-    comparison = comparison))}
+  cat("\n")
+  return(results)
+}
 
 
 #--------------------------------------------------------------------------------------
@@ -792,72 +757,105 @@ run_srr_analysis <- function(SSB_lag_data, SSB_data,
 #--------------------------------------------------------------------------------------
 
 plot_SRR <- function(data, break_years, title_stock, used_model,
+                     ssb_col = "SSB", r_col = "R", year_col = "year",
                      Blim = 828874,
-                     colors = c("steelblue", "darkorange", "purple", "lightgreen", "indianred", "darkred", "darkblue")) {
+                     show_Blim = TRUE,  # New argument to control Blim display
+                     colors = c("steelblue", "darkorange", "purple", "lightgreen", "indianred", "darkred", "darkblue"),
+                     nudge_params = NULL) {  # New argument for nudge parameters
+  
+  # Check if specified columns exist in the data
+  required_cols <- c(ssb_col, r_col, year_col)
+  missing_cols <- required_cols[!required_cols %in% names(data)]
+  if (length(missing_cols) > 0) {
+    stop("Missing columns in data: ", paste(missing_cols, collapse = ", "))
+  }
   
   # Determine number of break years and resulting phases
   n_breaks <- length(break_years)
   n_phases <- n_breaks + 1
   
+  # Create phase column based on break years
   data$phase <- 1
   for (i in 1:n_breaks) {
-    data$phase[data$year > break_years[i]] <- i + 1}
+    data$phase[data[[year_col]] > break_years[i]] <- i + 1
+  }
   
-  # Add initial plot
-  p <- ggplot(data = data, aes(x = SSB / 1000000, y = R / 1000000)) +
+  # Set default nudge parameters if not provided
+  if (is.null(nudge_params)) {
+    nudge_params <- list(
+      list(nudge_y = -5, nudge_x = -0.2), # first year
+      list(nudge_y = 0, nudge_x = -0.5),  # breakpoint
+      list(nudge_y = -5, nudge_x = -0.2), # last year
+      list(nudge_y = 5, nudge_x = -0.2),  # more breakpoints
+      list(nudge_y = -0, nudge_x = -0.2)
+    )
+  }
+  
+  # Create the plot using the specified column names
+  p <- ggplot(data = data, aes(x = .data[[ssb_col]] / 1000000, y = .data[[r_col]] / 1000000)) +
     geom_path(colour = "grey") +
     geom_point(aes(color = factor(phase))) +
     scale_color_manual(values = colors[1:n_phases]) +
-    geom_vline(xintercept = Blim / 1000000, linetype = "dashed", color = "gray30") +
-    geom_label(x = Blim / 1000000, y = 7, label = expression("B"[lim]),
-               color = "gray30", size = 3.5, fontface = "bold") +
-    labs(title = paste("Stock-Recruitment Relationship for", title_stock), subtitle = used_model,
-         x = "SSB in millions", y = "R in billions") +
+    labs(title = paste("Stock-Recruitment Relationship for", title_stock), 
+         subtitle = used_model,
+         x = "SSB in millions", 
+         y = "R in billions") +
     theme_minimal() +
     theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"), 
           plot.subtitle = element_text(hjust = 0.5, size = 12, face = "italic"),
           legend.position = "none",
           axis.text = element_text(size = 12))
   
+  # Add Blim line and label only if show_Blim is TRUE
+  if (show_Blim) {
+    p <- p + 
+      geom_vline(xintercept = Blim / 1000000, linetype = "dashed", color = "gray30") +
+      geom_label(x = Blim / 1000000, y = 7, label = expression("B"[lim]),
+                 color = "gray30", size = 3.5, fontface = "bold")
+  }
+  
   # Add geom_smooth for each phase
   for (i in 1:n_phases) {
     phase_data <- data %>% dplyr::filter(phase == i)
     if (nrow(phase_data) > 0) {
       p <- p + geom_smooth(data = phase_data,
-                           mapping = aes(x = SSB / 1000000, y = R / 1000000),
-                           col = colors[i], method = "lm")}}
-  
-  # Define nudge parameters for text labels to avoid overlap
-  nudge_params <- list(
-    list(nudge_y = -5, nudge_x = -0.2), # first year
-    list(nudge_y = 0, nudge_x = -0.5),  # breakpoint
-    list(nudge_y = -5, nudge_x = -0.2), # last year
-    list(nudge_y = 5, nudge_x = -0.2),  # more breakpoints
-    list(nudge_y = -0, nudge_x = -0.2))
+                           mapping = aes(x = .data[[ssb_col]] / 1000000, 
+                                         y = .data[[r_col]] / 1000000),
+                           col = colors[i], method = "lm")
+    }
+  }
   
   # Add text labels for the first and last years
-  p <- p +  geom_text_repel(data = data[1, ], aes(label = year),
-                           point.padding = 0.2, nudge_y = nudge_params[[1]]$nudge_y,
+  p <- p + geom_text_repel(data = data[1, ], 
+                           aes(label = .data[[year_col]]),
+                           point.padding = 0.2, 
+                           nudge_y = nudge_params[[1]]$nudge_y,
                            nudge_x = nudge_params[[1]]$nudge_x,
                            size = 3, col = "gray30", segment.size = 0.2) +
-            geom_text_repel(data = data[nrow(data)-1, ], aes(label = year),
-                            point.padding = 0.2, nudge_y = nudge_params[[3]]$nudge_y,
-                            nudge_x = nudge_params[[3]]$nudge_x,
-                            size = 3, col = "gray30", segment.size = 0.2)
+    geom_text_repel(data = data[nrow(data)-1, ], 
+                    aes(label = .data[[year_col]]),
+                    point.padding = 0.2, 
+                    nudge_y = nudge_params[[3]]$nudge_y,
+                    nudge_x = nudge_params[[3]]$nudge_x,
+                    size = 3, col = "gray30", segment.size = 0.2)
   
   # Add text labels for each breakpoint year
   for (i in 1:n_breaks) {
     brk_year <- break_years[i]
-    break_year_data <- data %>% dplyr::filter(year == brk_year)
+    break_year_data <- data %>% dplyr::filter(.data[[year_col]] == brk_year)
     if (nrow(break_year_data) > 0) {
       nudge_idx <- (i %% length(nudge_params)) + 1
-      p <- p + geom_text_repel(data = break_year_data, aes(label = year),
+      p <- p + geom_text_repel(data = break_year_data, 
+                               aes(label = .data[[year_col]]),
                                point.padding = 0.2,
                                nudge_y = nudge_params[[nudge_idx]]$nudge_y,
                                nudge_x = nudge_params[[nudge_idx]]$nudge_x,
-                               size = 3, col = "gray30", segment.size = 0.2)}}
-
-  return(p)}
+                               size = 3, col = "gray30", segment.size = 0.2)
+    }
+  }
+  
+  return(p)
+}
 
 
 #--------------------------------------------------------------------------------------

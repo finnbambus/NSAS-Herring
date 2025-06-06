@@ -120,7 +120,7 @@ env_df_subset <- names(env_data_subset) %>%
           Region = .x)})}) %>%
   group_by(Region, year, Variable) %>%
   summarise(Mean_Value = mean(Value, na.rm = TRUE), .groups = 'drop') %>%
-  pivot_wider(names_from = Variable, values_from = Mean_Value, names_prefix = "mean_") %>%
+  pivot_wider(names_from = Variable, values_from = Mean_Value, names_prefix = "Mean_") %>%
   arrange(Region, year)
 ```
 

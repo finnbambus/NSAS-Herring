@@ -32,7 +32,9 @@ library(INDperform)
 
 ```{r}
 load("data/Herring_full.Rdata")
-load("data/env_df_full.Rdata")
+
+### Load plotting function from "functions.R"
+source("R/functions.R")
 ```
 
 # Change-points
@@ -41,30 +43,28 @@ load("data/env_df_full.Rdata")
 
 ```{r}
 ### cpt analysis
-ssbcpts <- cpt.mean(data = Herring_full$SSB, method = "BinSeg", Q = 6)
-plot(ssbcpts, type = "l", cpt.col = "navyblue", xlab = "Index", pt.widt = 4)
-cpts(ssbcpts)
-#### Index: 4,    18,   20,   40,   54,   72
-#### years: 1950, 1964, 1966, 1986, 2000, 2018
+results_cpt <- changepoint_analysis(Herring_full, 
+                                          region_name = "Full Stock",
+                                          year_col = "year",
+                                          Q = 6,
+                                          bcp_threshold = 0.5,
+                                          ssb_col = "SSB")
+# CPT changepoint indices:  4,    18,   20,   40,   54,   72 
+# CPT changepoint years:    1950, 1964, 1966, 1986, 2000, 2018 
 
-### bcp analysis
-bcp.ssb <- bcp(Herring_full$SSB)
-plot(bcp.ssb, main = "SSB")
-which(bcp.ssb$posterior.prob >= 0.5)
-#### Index: 20,   37,   54
-#### years: 1966, 1983, 2000
+## BCP Analysis
+# BCP changepoint indices:  20,   37,   54 
+# BCP changepoint years:    1966, 1983, 2000 
 
-#### Changepoints detected by both methods +-1 year and min. 5 years between points:
-#### 1966, 2000
-#### Opinion: would include 1986/1983 (looks significant) as only detected by BinSeg
+## Consensus Analysis
+# Consensus changepoints (± 1 yr, min 5 yr apart): 1966, 2000 
+# CPT only: 1950, 1964, 1986, 2018 
+# BCP only: 1983 
 ```
 
 ## Plot Change-points
 
 ```{r}
-### Load plotting function from "functions.R"
-source("R/functions.R")
-
 ### Call function plot_SSB_cpt
 plot_SSB_cpt_full <- plot_SSB_cpt(data = Herring_full, 
               changepoints = c(1966, 1986,2000), 
@@ -96,12 +96,12 @@ ggsave(filename = file.path("plots/", "SSB_cpt_full.png"),
 ```{r}
 ### Check for time-lags
 ccf(Herring_full$SSB[-(79:78)], Herring_full$F[-(79:78)], type = "correlation") # 3 years lag
+Herring_full$SSB_lag <- lag(Herring_full$SSB, 3)
 
 ### Call "breakpoint_analysis" function
-brkpt_results <- breakpoint_analysis(Herring_full, "SSB", "F", "year",
+results_brkpt <- breakpoint_analysis(Herring_full, "SSB", "F", "year",
                                     lag_years = 3, 
-                                    region_name = "Full Stock",
-                                    dataset_name = "Herring_full")
+                                    region_name = "Full Stock")
 
 # Optimal number of breaks: 4 
 # Best breakpoint F values:
@@ -114,7 +114,7 @@ brkpt_results <- breakpoint_analysis(Herring_full, "SSB", "F", "year",
 
 ```{r}
 ### Call function plot_hysteresis
-plot_hysteresis_full <- plot_hysteresis(Herring_full, brkpt_results$break_years, "Full Stock")
+plot_hysteresis_full <- plot_hysteresis(Herring_full, results_brkpt$break_years, "Full Stock")
 plot_hysteresis_full
 ```
 
@@ -137,13 +137,13 @@ ggsave(filename = file.path("plots/", "hysteresis_full.png"),
 ### Run model comparison from model_comp_functions.R 
 source("R/model_comp_functions.R")
 
-SSR_analysis <- run_srr_analysis(
+models_SRR <- run_srr_analysis(
     data_for_srr = Herring_full[-(79:78),],
    recruit_col = "R",
    ssb_col = "SSB",
    opt_brks_val = 4)
 
-print(SSR_analysis$comparison_table)
+print(models_SRR$comparison_table)
 
 #### strucchange model shows lowest RMSE
 
@@ -160,7 +160,7 @@ results_SRR <- srr_breakpoint_analysis(Herring_full, "SSB", "R", "year", "Herrin
 ## Plotting
 
 ```{r}
-plot_SRR_full <- plot_SRR(Herring_full, best_brk_years_SRR, "Full Stock", "strucchange")
+plot_SRR_full <- plot_SRR(Herring_full, break_years = results_SRR$break_years, "Full Stock", "strucchange")
 plot_SRR_full
 ```
 
@@ -178,14 +178,17 @@ ggsave(filename = file.path("plots/", "SRR_full.png"),
 # tGAM
 
 ```{r}
-### Merge env data to fishing
+# Load env data
+load("data/env_df_full.Rdata")
+
+### Merge env data to fish
 tGAM_data <- merge(Herring_full, env_df_full,by = "year") %>%
-  select(year, SSB_lag, R, Mean_SST, Mean_SBT, Mean_SSS)
+  dplyr::select(year, SSB_lag, R, Mean_SST, Mean_SBT, Mean_SSS)
 
 ### Run threshold gam function from "functions" with each variable
 run_threshold_gam(tGAM_data, "R", "SSB_lag", "Mean_SST", "year") # FALSE, 10.87623
 run_threshold_gam(tGAM_data, "R", "SSB_lag", "Mean_SBT", "year") # FALSE, 8.561897
 run_threshold_gam(tGAM_data, "R", "SSB_lag", "Mean_SSS", "year") # FALSE, 34.42214
 
-#### No significant threshhold effect found
+#### No significant threshold effect found
 ```

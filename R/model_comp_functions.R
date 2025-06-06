@@ -1,4 +1,7 @@
-# Helper Functions ----
+
+#--------------------------------------------------------------------------------------
+## Helper functions
+#--------------------------------------------------------------------------------------
 
 # A simple is_empty function
 is_empty <- function(x) {
@@ -14,6 +17,10 @@ check_data_columns <- function(data, required_cols) {
   if (length(missing_cols) > 0) {
     stop(paste("Missing columns in data:", paste(missing_cols, collapse = ", ")))}}
 
+#--------------------------------------------------------------------------------------
+## Fit and compare models
+#--------------------------------------------------------------------------------------
+
 # Fit Generalized Linear Models (GLMs) with different families
 #
 # This function fits Gaussian, Poisson, Quasipoisson, and Negative Binomial GLMs
@@ -23,6 +30,7 @@ check_data_columns <- function(data, required_cols) {
 # @param recruit_col The name of the recruitment column (character string).
 # @param ssb_col The name of the SSB column (character string).
 # @return A list containing fitted GLM models and their overdispersion values.
+
 fit_glm_models <- function(data, recruit_col = "R", ssb_col = "SSB") {
   check_data_columns(data, c(recruit_col, ssb_col))
   
