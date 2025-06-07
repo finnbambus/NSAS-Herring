@@ -484,14 +484,58 @@ ggsave(filename = file.path("plots/", "SRR_components.png"),
 ### Load env data
 load("data/env_df_subset.Rdata")
 
-### Merge env data to fish
+### Shetland Orkney
+#### Merge env data to fish
+tGAM <- list()
 tGAM$SHOR <- merge(Herring$SHOR, env_df_subset[env_df_subset$Region == "Shetland_Orkney",],by = "year") %>%
   dplyr::select(year, SSB_lag, R, Mean_SST, Mean_SBT, Mean_SSS)
 
-### Run threshold gam function from "functions" with each variable
-run_threshold_gam(tGAM_data, "R", "SSB_lag", "Mean_SST", "year") # FALSE, 10.87623
-run_threshold_gam(tGAM_data, "R", "SSB_lag", "Mean_SBT", "year") # FALSE, 8.561897
-run_threshold_gam(tGAM_data, "R", "SSB_lag", "Mean_SSS", "year") # FALSE, 34.42214
+#### Run threshold gam function from "functions" with each variable
+run_threshold_gam(tGAM$SHOR, "R", "SSB_lag", "Mean_SST", "year") # FALSE, 9.631367
+run_threshold_gam(tGAM$SHOR, "R", "SSB_lag", "Mean_SBT", "year") # FALSE, 8.684516
+run_threshold_gam(tGAM$SHOR, "R", "SSB_lag", "Mean_SSS", "year") # FALSE, 35.22361
+
+#### No significant threshold effect found
+
+#---------------------------------------------------------------------
+
+### Buchan
+#### Merge env data to fish
+tGAM$Buchan <- merge(Herring$Buchan, env_df_subset[env_df_subset$Region == "Buchan",],by = "year") %>%
+  dplyr::select(year, SSB_lag, R, Mean_SST, Mean_SBT, Mean_SSS)
+
+#### Run threshold gam function from "functions" with each variable
+run_threshold_gam(tGAM$Buchan, "R", "SSB_lag", "Mean_SST", "year") # FALSE, 10.10035
+run_threshold_gam(tGAM$Buchan, "R", "SSB_lag", "Mean_SBT", "year") # TRUE,  8.593926
+run_threshold_gam(tGAM$Buchan, "R", "SSB_lag", "Mean_SSS", "year") # FALSE, 34.67423
+
+#### Significant threshold effect found for SBT at 8.6°C
+
+#---------------------------------------------------------------------
+
+### Banks
+#### Merge env data to fish
+tGAM$Banks <- merge(Herring$Banks, env_df_subset[env_df_subset$Region == "Banks",],by = "year") %>%
+  dplyr::select(year, SSB_lag, R, Mean_SST, Mean_SBT, Mean_SSS)
+
+#### Run threshold gam function from "functions" with each variable
+run_threshold_gam(tGAM$Banks, "R", "SSB_lag", "Mean_SST", "year") # FALSE, 10.25506
+run_threshold_gam(tGAM$Banks, "R", "SSB_lag", "Mean_SBT", "year") # FALSE, 9.65014
+run_threshold_gam(tGAM$Banks, "R", "SSB_lag", "Mean_SSS", "year") # FALSE, 34.83148
+
+#### No significant threshold effect found
+
+#---------------------------------------------------------------------
+
+### Downs
+#### Merge env data to fish
+tGAM$Downs <- merge(Herring$Downs, env_df_subset[env_df_subset$Region == "Downs",],by = "year") %>%
+  dplyr::select(year, SSB_lag, R, Mean_SST, Mean_SBT, Mean_SSS)
+
+#### Run threshold gam function from "functions" with each variable
+run_threshold_gam(tGAM$Downs, "R", "SSB_lag", "Mean_SST", "year") # FALSE, 11.89771
+run_threshold_gam(tGAM$Downs, "R", "SSB_lag", "Mean_SBT", "year") # FALSE, 11.8788
+run_threshold_gam(tGAM$Downs, "R", "SSB_lag", "Mean_SSS", "year") # FALSE, 33.42736
 
 #### No significant threshold effect found
 ```
