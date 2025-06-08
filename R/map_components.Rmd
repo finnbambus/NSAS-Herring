@@ -1,0 +1,187 @@
+---
+title: "map_components"
+author: "finn krauss"
+date: "2025-06-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load Packages
+```{r}
+setwd("~/R Studio/NSAS Herring/NSAS-Herring")
+
+# Load required libraries
+library(sf)
+library(ggplot2)
+library(dplyr)
+library(elevatr)
+library(rnaturalearth)
+library(ggnewscale)
+library(grid)
+```
+
+```{r}
+# Read the combined shapefile
+shapefile_path <- "data raw/components_shp/components.shp"
+
+if (!file.exists(shapefile_path)) {
+  stop("Combined shapefile not found! Run the combining script first.")
+}
+
+cat("Reading combined shapefile:", shapefile_path, "\n")
+marine_components <- st_read(shapefile_path, quiet = TRUE)
+
+# Ensure WGS84 projection
+marine_components <- st_transform(marine_components, crs = 4326)
+
+# Calculate map extent with adjusted padding
+bbox <- st_bbox(marine_components)
+padding_east <- 8   # Add 3° more east (1 + 3)
+padding_west <- 2   # Remove 1° west (1 - 1)  
+padding_ns <- 0.5     # Reduce north/south by 0.5° (1 - 0.5)
+
+map_extent <- list(
+  lon_min = bbox["xmin"] - padding_west,
+  lon_max = bbox["xmax"] + padding_east,
+  lat_min = bbox["ymin"] - padding_ns,
+  lat_max = bbox["ymax"] + padding_ns
+)
+
+cat("Map extent:\n")
+cat("  Longitude:", round(map_extent$lon_min, 1), "to", round(map_extent$lon_max, 1), "\n")
+cat("  Latitude:", round(map_extent$lat_min, 1), "to", round(map_extent$lat_max, 1), "\n")
+
+# Download bathymetry data
+cat("\nDownloading bathymetry data...\n")
+
+# Create extent polygon for data download
+extent_poly <- st_polygon(list(matrix(c(
+  map_extent$lon_min, map_extent$lat_min,
+  map_extent$lon_max, map_extent$lat_min,
+  map_extent$lon_max, map_extent$lat_max,
+  map_extent$lon_min, map_extent$lat_max,
+  map_extent$lon_min, map_extent$lat_min
+), ncol = 2, byrow = TRUE))) %>%
+  st_sfc(crs = 4326) %>%
+  st_sf()
+
+# Get elevation data (includes bathymetry)
+elevation_data <- get_elev_raster(extent_poly, z = 6)
+
+# Convert to data frame and process elevation data
+bathy_df <- as.data.frame(elevation_data, xy = TRUE)
+names(bathy_df) <- c("longitude", "latitude", "elevation")
+
+# Separate land and sea data
+bathy_sea <- bathy_df %>%
+  filter(!is.na(elevation), elevation <= 0) %>%
+  mutate(depth = abs(elevation),
+         depth_capped = pmin(depth, 1000))  # Cap depth at 1000m for color scaling
+
+topo_land <- bathy_df %>%
+  filter(!is.na(elevation), elevation > 0) %>%
+  mutate(elevation_capped = pmin(elevation, 3000))  # Cap elevation for color scaling
+
+if (nrow(bathy_sea) == 0) {
+  stop("No bathymetry data available for this region")
+}
+
+cat("Bathymetry data successfully processed!\n")
+cat("Depth range:", min(bathy_sea$depth), "to", max(bathy_sea$depth), "meters\n")
+
+if (nrow(topo_land) > 0) {
+  cat("Topography data successfully processed!\n")
+  cat("Elevation range:", min(topo_land$elevation), "to", max(topo_land$elevation), "meters\n")
+}
+
+# Get coastline data
+world <- ne_countries(scale = "medium", returnclass = "sf")
+
+# Calculate component centroids for labels
+component_centroids <- marine_components %>%
+  group_by(component) %>%
+  summarise(geometry = st_union(geometry), .groups = 'drop') %>%
+  mutate(
+    centroid = st_centroid(geometry),
+    lon = st_coordinates(centroid)[,1],
+    lat = st_coordinates(centroid)[,2]
+  )
+
+# Create bathymetric map with corrected layer hierarchy
+bathymetric_map <- ggplot() +
+  # Layer 1: Add bathymetry (bottom layer)
+  geom_raster(data = bathy_sea, 
+              aes(x = longitude, y = latitude, fill = depth_capped),
+              alpha = 0.8) +
+  
+  # Bathymetry color scale (inverted viridis for shallow = light, deep = dark)
+  scale_fill_viridis_c(option = "viridis",
+                       trans = "sqrt",
+                       limits = c(0, 1000),
+                       direction = -1,
+                       guide = "none") +
+  
+  # Add new fill scale for land topography
+  new_scale_fill() +
+  
+  # Layer 2: Add marine components as black outlines (middle layer)
+  geom_sf(data = marine_components, 
+          fill = NA,
+          color = "black",
+          linewidth = 1) +
+  
+  # Layer 3: Add topography for land areas (overlays component lines)
+  {if(exists("topo_land") && nrow(topo_land) > 0) {
+    geom_raster(data = topo_land, 
+                aes(x = longitude, y = latitude, fill = elevation_capped),
+                alpha = 1)
+  }} +
+  
+  # Land topography color scale (black for high, grey for flat)
+  {if(exists("topo_land") && nrow(topo_land) > 0) {
+    scale_fill_gradient(low = "grey40", high = "grey20",
+                       trans = "sqrt",
+                       limits = c(0, 3000),
+                       guide = "none",
+                       aesthetics = "fill")
+  }} +
+  
+  # Layer 4: Add component labels (top layer - appears over everything)
+  geom_text(data = component_centroids,
+            aes(x = lon, y = lat, label = component),
+            size = 7, 
+            fontface = "bold", 
+            color = "black",
+            check_overlap = TRUE) +
+  
+  # Set map extent and projection
+  coord_sf(xlim = c(map_extent$lon_min, map_extent$lon_max),
+           ylim = c(map_extent$lat_min, map_extent$lat_max),
+           crs = 4326,
+           expand = FALSE) +
+  
+  # Clean styling
+  theme_minimal() +
+  theme(
+    axis.title = element_blank(),
+    legend.position = "none",
+    panel.grid.major = element_line(color = "white", linewidth = 0.3),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "white", color = NA),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
+
+# Display the map
+#print(bathymetric_map)
+
+# Save the map
+ggsave(filename = file.path("plots/", "component_map.png"), 
+       plot = bathymetric_map,
+       width = 15, height = 15, 
+       dpi = 300, 
+       bg = "white")
+
+```
