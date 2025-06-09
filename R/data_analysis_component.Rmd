@@ -26,6 +26,7 @@ library(MASS)
 library(hydroGOF)
 library(mgcv)
 library(INDperform)
+library(gridExtra)
 ```
 
 ## Import data
@@ -182,11 +183,16 @@ plots_SSB_cpt$Downs
 ### Save plots
 
 ```{r}
+
 ggsave(filename = file.path("plots/", "SSB_cpt_components.png"),
-       plot = gridExtra::grid.arrange(plots_SSB_cpt$SHOR, 
-                                      plots_SSB_cpt$Buchan, 
-                                      plots_SSB_cpt$Banks, 
-                                      plots_SSB_cpt$Downs, ncol = 2),
+       plot = grid.arrange(
+         plots_SSB_cpt$SHOR + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
+         plots_SSB_cpt$Buchan + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
+         plots_SSB_cpt$Banks + theme(axis.title.x = element_text(), axis.title.y = element_blank()),
+         plots_SSB_cpt$Downs + theme(axis.title.x = element_text(), axis.title.y = element_blank()),
+         ncol = 2,
+         bottom = "Year",
+         left = "SSB in million t"),
        bg = "white",
        width = 15,
        height = 10,

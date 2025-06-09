@@ -20,6 +20,9 @@ library(ncdf4)
 library(raster)
 library(ggplot2)
 library(reshape2)
+library(sf)
+library(readr)
+library(patchwork)
 ```
 
 # Load and clean files
@@ -88,7 +91,7 @@ Herring_LAI <- Herring_full %>%
 source("R/functions.R")
 
 ## Call function and store in environment
-env_data_full <- load_environmental_data("data raw/NS SSt Monthly.nc", "data raw/NS SBT Monthly.nc", "data raw/NS SSS Monthly.nc")
+env_data_full <- load_environmental_data("data raw/NS SST Monthly.nc", "data raw/NS SBT Monthly.nc", "data raw/NS SSS Monthly.nc")
 
 ## Break down into df and year average
 env_df_full <- c("SST", "SBT", "SSS") %>%
@@ -97,6 +100,7 @@ env_df_full <- c("SST", "SBT", "SSS") %>%
                        Variable = .x)) %>%
   group_by(year, Variable) %>%
   summarise(Mean_Value = mean(Value, na.rm = TRUE), .groups = 'drop') %>%
+  filter(year != max(year)) %>%
   pivot_wider(names_from = Variable, values_from = Mean_Value, names_prefix = "mean_") %>%
   arrange(year)
 ```
@@ -105,7 +109,7 @@ env_df_full <- c("SST", "SBT", "SSS") %>%
 
 ```{r}
 ## Call the function and store result in environment (function in "functions.R")
-env_data_subset <- subset_environmental_data(env_data_full)
+env_data_subset <- subset_environmental_data_shapefile(env_data_full, "data raw/components_shp/components.shp", "component")
 
 ## Break down into df and year average
 env_df_subset <- names(env_data_subset) %>%
@@ -120,6 +124,7 @@ env_df_subset <- names(env_data_subset) %>%
           Region = .x)})}) %>%
   group_by(Region, year, Variable) %>%
   summarise(Mean_Value = mean(Value, na.rm = TRUE), .groups = 'drop') %>%
+  filter(year != max(year)) %>%  # Remove the last (incomplete) year
   pivot_wider(names_from = Variable, values_from = Mean_Value, names_prefix = "Mean_") %>%
   arrange(Region, year)
 ```
@@ -165,34 +170,7 @@ plot_LAI_percent <- ggplot(LAI_component, aes(x = as.factor(year),
   scale_fill_viridis_d()
 print(plot_LAI_percent)
 
-## Plot timeseries of SSB including confindence bounds
-plot_Herring_full <- ggplot(Herring_full, aes(x = year)) +
-  geom_ribbon(aes(ymin = (l_bnd / 1000000), 
-                  ymax = (u_bnd / 1000000)), fill = "skyblue", alpha = 0.5) +
-  geom_line(aes(y = (SSB / 1000000)), color = "navyblue", linewidth = 1) +
-  labs(title = "SSB with 95% Confidence Bounds", 
-       x = "Year", 
-       y = "SSB in million t") +
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5),
-        axis.title.x = element_text(margin = margin(t = 10)),
-        axis.title.y = element_text(margin = margin(r = 10)))
-print(plot_Herring_full)
-
-## Visualise subset SSB data by component
-plot_SSB_component <- ggplot(Herring_LAI, aes(x = year, y = (SSB_component / 1000000))) +
-  geom_ribbon(aes(ymin = (l_bnd_component / 1000000), ymax = (u_bnd_component / 1000000)), fill = "skyblue", alpha = 0.5) +
-  geom_line(color = "navyblue", linewidth = 0.8) +
-  facet_wrap(~ component, ncol = 2, scales = "fixed") +
-  labs(title = "SSB with 95% Confidence Bounds by Component over Years",
-       x = "Year",
-       y = "SSB in million tonnes by Component") +
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5),
-        axis.title.x = element_text(margin = margin(t = 10)),
-        axis.title.y = element_text(margin = margin(r = 10)))
-print(plot_SSB_component)
-
+### SSB component overlay
 plot_SSB_component_b <- ggplot(Herring_LAI, aes(x = year, y = SSB_component / 1e6, color = component, fill = component)) +
   geom_ribbon(aes(ymin = l_bnd_component / 1e6,
                   ymax = u_bnd_component / 1e6), alpha = 0.3, color = NA) +
@@ -210,20 +188,12 @@ plot_SSB_component_b
 ## Environmental data visualization
 
 ```{r}
-## Call function and plot combined data (function in "functions.R")
-plot_env_data_full <- plot_environmental_ts(env_data_full, "Overall North Sea")
-print(plot_env_data_full)
+### Call "plot_env_data"
+env_df_subset$Region <- factor(env_df_subset$Region, 
+                              levels = c("Shetland_Orkney", "Buchan", "Banks", "Downs"))
 
-## Plot subset data into a grid
-plot_env_data_Shetland_Orkneys <- plot_environmental_ts(env_data_subset$Shetland_Orkney, "Shetland / Orkney")
-plot_env_data_Buchan <- plot_environmental_ts(env_data_subset$Buchan, "Buchan")
-plot_env_data_Banks <- plot_environmental_ts(env_data_subset$Banks, "Banks")
-plot_env_data_Downs <- plot_environmental_ts(env_data_subset$Downs, "Downs")
-
-print(plot_env_data_Shetland_Orkneys)
-print(plot_env_data_Buchan)
-print(plot_env_data_Banks)
-print(plot_env_data_Downs)
+plot_env_grid <- plot_env_data(env_df_full, env_df_subset)
+print(plot_env_grid)
 ```
 
 # Save data and plots
@@ -262,13 +232,6 @@ ggsave(filename = file.path("plots/", "LAI_percent.png"),
        height = 10,
        dpi = 300)
 
-ggsave(filename = file.path("plots/", "SSB_component.png"),
-       plot = plot_SSB_component,
-       bg = "white",
-       width = 15,
-       height = 10,
-       dpi = 300)
-
 ggsave(filename = file.path("plots/", "SSB_component_b.png"),
        plot = plot_SSB_component_b,
        bg = "white",
@@ -276,46 +239,11 @@ ggsave(filename = file.path("plots/", "SSB_component_b.png"),
        height = 10,
        dpi = 300)
 
-ggsave(filename = file.path("plots/", "SSB.png"),
-       plot = plot_Herring_full,
+### Env. plot
+ggsave(filename = file.path("plots/", "env_grid.png"),
+       plot = plot_env_grid,
        bg = "white",
        width = 15,
-       height = 10,
-       dpi = 300)
-
-### Env. plots
-ggsave(filename = file.path("plots/", "env_NS.png"),
-       plot = plot_env_data_full,
-       bg = "white",
-       width = 10,
-       height = 10,
-       dpi = 300)
-
-ggsave(filename = file.path("plots/", "env_Banks.png"),
-       plot = plot_env_data_Banks,
-       bg = "white",
-       width = 10,
-       height = 10,
-       dpi = 300)
-
-ggsave(filename = file.path("plots/", "env_Buchan.png"),
-       plot = plot_env_data_Buchan,
-       bg = "white",
-       width = 10,
-       height = 10,
-       dpi = 300)
-
-ggsave(filename = file.path("plots/", "env_Downs.png"),
-       plot = plot_env_data_Downs,
-       bg = "white",
-       width = 10,
-       height = 10,
-       dpi = 300)
-
-ggsave(filename = file.path("plots/", "env_Shetland_Orkneys.png"),
-       plot = plot_env_data_Shetland_Orkneys,
-       bg = "white",
-       width = 10,
        height = 10,
        dpi = 300)
 ```

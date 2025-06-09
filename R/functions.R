@@ -59,41 +59,101 @@ load_environmental_data <- function(sst_file, sbt_file, sss_file) {
 
 
 #--------------------------------------------------------------------------------------
-## Subset environmental data by components
+## Subset environmental data by components with shapefile
 #--------------------------------------------------------------------------------------
 
-subset_environmental_data <- function(combined_data) {
+subset_environmental_data_shapefile <- function(combined_data, shapefile_path, area_column = "name", remove_na = TRUE) {
   
-  ### Load coords_components
-  coords_components <- read_csv("data raw/coords_components.csv")
+  ### Load shapefile
+  areas_sf <- st_read(shapefile_path)
+  
+  ### Create spatial points from lon/lat coordinates
+  coords_df <- expand.grid(lon = combined_data$lon, lat = combined_data$lat)
+  coords_sf <- st_as_sf(coords_df, coords = c("lon", "lat"), crs = st_crs(areas_sf))
   
   ### Initialise list
   environmental_subsets_by_area <- list()
   
-  ### Loop through each area defined in coords_components
-  for (i in 1:nrow(coords_components)) {
-    area_name <- coords_components$component[i]
-    lon_min <- coords_components$lon_min[i]
-    lon_max <- coords_components$lon_max[i]
-    lat_min <- coords_components$lat_min[i]
-    lat_max <- coords_components$lat_max[i]
+  ### Loop through each polygon in the shapefile
+  for (i in 1:nrow(areas_sf)) {
+    area_name <- areas_sf[[area_column]][i]
     
-    ### Find the indices of long & lat that fall within the areas bounds
-    ### Use 'combined_data$' to access elements of the passed list
-    lon_indices <- which(combined_data$lon >= lon_min & combined_data$lon <= lon_max)
-    lat_indices <- which(combined_data$lat >= lat_min & combined_data$lat <= lat_max)
+    ### Find points that fall within this polygon
+    within_area <- st_within(coords_sf, areas_sf[i, ], sparse = FALSE)[, 1]
     
-    ### Subset the 3D environmental arrays using the identified indices
-    ### Use 'combined_data$' to access elements of the passed list
+    ### Convert logical vector back to lon/lat indices
+    within_indices <- which(within_area)
+    
+    if (length(within_indices) == 0) {
+      warning(paste("No data points found within area:", area_name))
+      next}
+    
+    ### Extract lon/lat indices from the grid positions
+    lon_indices <- ((within_indices - 1) %% length(combined_data$lon)) + 1
+    lat_indices <- ((within_indices - 1) %/% length(combined_data$lon)) + 1
+    
+    ### Get unique indices
+    unique_lon_indices <- sort(unique(lon_indices))
+    unique_lat_indices <- sort(unique(lat_indices))
+    
+    ### Initial subset of the environmental arrays
+    subset_SST <- combined_data$SST[unique_lon_indices, unique_lat_indices, , drop = FALSE]
+    subset_SBT <- combined_data$SBT[unique_lon_indices, unique_lat_indices, , drop = FALSE]
+    subset_SSS <- combined_data$SSS[unique_lon_indices, unique_lat_indices, , drop = FALSE]
+    subset_lon <- combined_data$lon[unique_lon_indices]
+    subset_lat <- combined_data$lat[unique_lat_indices]
+    
+    ### Remove NA locations if requested
+    if (remove_na) {
+      ### Identify grid cells that have data (not all NA across time)
+      ### Check if any time slice has non-NA values for any variable
+      has_data <- array(FALSE, dim = c(length(unique_lon_indices), length(unique_lat_indices)))
+      
+      for (lon_idx in 1:length(unique_lon_indices)) {
+        for (lat_idx in 1:length(unique_lat_indices)) {
+          ### Check if this location has any non-NA values across all time steps
+          sst_vals <- subset_SST[lon_idx, lat_idx, ]
+          sbt_vals <- subset_SBT[lon_idx, lat_idx, ]
+          sss_vals <- subset_SSS[lon_idx, lat_idx, ]
+          
+          ### Location has data if any variable has at least one non-NA value
+          has_data[lon_idx, lat_idx] <- any(!is.na(sst_vals)) | 
+            any(!is.na(sbt_vals)) | 
+            any(!is.na(sss_vals))}}
+      
+      ### Find indices of locations with data
+      valid_lon_indices <- which(apply(has_data, 1, any))
+      valid_lat_indices <- which(apply(has_data, 2, any))
+      
+      ### Check if any valid data remains
+      if (length(valid_lon_indices) == 0 || length(valid_lat_indices) == 0) {
+        warning(paste("No valid data points (all NAs) found within area:", area_name))
+        next}
+      
+      ### Subset to only valid locations
+      subset_SST <- subset_SST[valid_lon_indices, valid_lat_indices, , drop = FALSE]
+      subset_SBT <- subset_SBT[valid_lon_indices, valid_lat_indices, , drop = FALSE]
+      subset_SSS <- subset_SSS[valid_lon_indices, valid_lat_indices, , drop = FALSE]
+      subset_lon <- subset_lon[valid_lon_indices]
+      subset_lat <- subset_lat[valid_lat_indices]
+      
+      ### Report how many locations were removed
+      n_removed <- (length(unique_lon_indices) * length(unique_lat_indices)) - 
+        (length(valid_lon_indices) * length(valid_lat_indices))
+      if (n_removed > 0) {
+        message(paste("Removed", n_removed, "NA-only grid cells from area:", area_name))}}
+    
+    ### Create final subset list
     subset_env_list <- list(
-      SST = combined_data$SST[lon_indices, lat_indices, ],
-      SBT = combined_data$SBT[lon_indices, lat_indices, ],
-      SSS = combined_data$SSS[lon_indices, lat_indices, ],
-      lon = combined_data$lon[lon_indices],
-      lat = combined_data$lat[lat_indices],
+      SST = subset_SST,
+      SBT = subset_SBT,
+      SSS = subset_SSS,
+      lon = subset_lon,
+      lat = subset_lat,
       years = combined_data$years,
       months = combined_data$months,
-      dates = combined_data$dates)
+      dates = combined_data$dates,
+      area_polygon = areas_sf[i, ])  # Store the polygon for reference
     
     ### Store data in the 'environmental_subsets_by_area' list
     environmental_subsets_by_area[[area_name]] <- subset_env_list}
@@ -105,62 +165,98 @@ subset_environmental_data <- function(combined_data) {
 ## Plot environmental data
 #--------------------------------------------------------------------------------------
 
-plot_environmental_ts <- function(data_list, plot_area_title) {
+plot_env_data <- function(env_df_full, env_df_subset, 
+                          effort_data = NULL, copepod_data = NULL) {
   
-  ### Extract variables from the input list
-  sst_data_raw <- data_list$SST
-  sbt_data_raw <- data_list$SBT
-  sss_data_raw <- data_list$SSS
-  dates <- data_list$dates
-  years <- data_list$years
-  months <- data_list$months
+  # Setup
+  areas <- if(is.factor(env_df_subset$Region)) levels(env_df_subset$Region) else unique(env_df_subset$Region)
+  column_names <- c("Full Stock", areas)
+  colors <- setNames(c("#2E86AB", "#A23B72", "#F18F01", "#C73E1D", "#6A994E"), column_names)
   
-  ### Calculate overall time series by averaging across the third dimension
-  overall_sst_ts <- apply(sst_data_raw, 3, mean, na.rm = TRUE)
-  overall_sbt_ts <- apply(sbt_data_raw, 3, mean, na.rm = TRUE)
-  overall_sss_ts <- apply(sss_data_raw, 3, mean, na.rm = TRUE)
+  # Simple placeholder data generation
+  generate_placeholder <- function(n_rows) rep(1, n_rows)
   
-  ### Create a data frame for monthly time series plotting
-  overall_ts_df <- data.frame(
-    Date = dates,
-    Year = years,
-    Month = months,
-    SST = overall_sst_ts,
-    SBT = overall_sbt_ts,
-    SSS = overall_sss_ts)
+  # Create time series plot
+  create_ts_plot <- function(data, y_var, y_label, column_name = NULL, 
+                             is_bottom = FALSE, is_first_col = FALSE, color = "black") {
+    
+    p <- ggplot(data, aes(x = year, y = !!sym(y_var))) +
+      geom_line(color = color, size = 0.6) +
+      geom_point(color = "grey20", size = 1) +
+      theme_minimal() +
+      theme(
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_line(color = "grey90", size = 0.3),
+        panel.background = element_rect(fill = "white", color = "grey80"),
+        axis.text = element_text(size = 8),
+        axis.title = element_text(size = 9),
+        axis.title.x = if(is_bottom) element_text(size = 9) else element_blank(),
+        axis.text.x = if(is_bottom) element_text(size = 8) else element_blank(),
+        axis.title.y = if(is_first_col) element_text(size = 9) else element_blank(),
+        plot.margin = margin(5, 5, 5, 5)
+      ) +
+      labs(
+        x = if(is_bottom) "Year" else "",
+        y = if(is_first_col) y_label else "")
+    
+    # Add column header
+    if (!is.null(column_name)) {
+      p <- p + annotate("text", x = Inf, y = Inf, label = column_name, 
+                        hjust = 1.1, vjust = 1.5, size = 3, fontface = "bold")}
+    
+    return(p)}
   
-  ### Calculate yearly averages from the monthly data
-  yearly_avg_df <- overall_ts_df %>%
-    group_by(Year) %>%
-    summarise(
-      SST = mean(SST, na.rm = TRUE),
-      SBT = mean(SBT, na.rm = TRUE),
-      SSS = mean(SSS, na.rm = TRUE),
-      .groups = 'drop') %>%
-    mutate(Date = as.Date(paste0(Year, "-06-06")))
+  # Create plots for each column
+  create_column_plots <- function(data_env, column_name, is_first_col = FALSE) {
+    color <- colors[[column_name]]
+    n_rows <- nrow(data_env)
+    
+    # Get or generate effort data
+    effort_vals <- if (!is.null(effort_data) && column_name %in% names(effort_data)) {
+      effort_data[[column_name]]
+    } else {
+      generate_placeholder(n_rows)}
+    
+    # Get or generate copepod data
+    copepod_vals <- if (!is.null(copepod_data) && column_name %in% names(copepod_data)) {
+      copepod_data[[column_name]]
+    } else {
+      generate_placeholder(n_rows)}
+    
+    # Create data frames
+    effort_df <- data.frame(year = data_env$year, effort = effort_vals)
+    copepod_df <- data.frame(year = data_env$year, copepod = copepod_vals)
+    
+    # Variable mappings for environmental data
+    env_vars <- if (column_name == "Full Stock") {
+      list(sst = "mean_SST", sbt = "mean_SBT", sss = "mean_SSS")
+    } else {
+      list(sst = "Mean_SST", sbt = "Mean_SBT", sss = "Mean_SSS")}
+    
+    # Create all plots
+    plots <- list(
+      create_ts_plot(effort_df, "effort", "Effort (thousands hours)", 
+                     if(is_first_col) column_name else column_name, FALSE, is_first_col, color),
+      create_ts_plot(copepod_df, "copepod", expression("Big Copepod (ind m"^"-3"*")"), 
+                     NULL, FALSE, is_first_col, color),
+      create_ts_plot(data_env, env_vars$sst, "SST (°C)", 
+                     NULL, FALSE, is_first_col, color),
+      create_ts_plot(data_env, env_vars$sbt, "SBT (°C)", 
+                     NULL, FALSE, is_first_col, color),
+      create_ts_plot(data_env, env_vars$sss, "SSS (PSU)", 
+                     NULL, TRUE, is_first_col, color))
+    
+    return(wrap_plots(plots, ncol = 1))}
   
-  ### Melt the data frames for easier plotting with ggplot2 (one 'value' column)
-  overall_ts_melted <- melt(overall_ts_df, id.vars = c("Date", "Year", "Month"),
-                            variable.name = "Variable", value.name = "Value_Monthly")
+  # Generate all columns
+  plot_list <- list(create_column_plots(env_df_full, "Full Stock", TRUE))
   
-  yearly_avg_melted <- melt(yearly_avg_df, id.vars = c("Date", "Year"),
-                            variable.name = "Variable", value.name = "Value_Yearly")
+  for (area in areas) {
+    area_data <- env_df_subset %>% filter(Region == area) %>% arrange(year)
+    plot_list <- append(plot_list, list(create_column_plots(area_data, area, FALSE)))}
   
-  ### Plot overall time series with yearly averages overlayed
-  p <- ggplot(overall_ts_melted, aes(x = Date, y = Value_Monthly, color = Variable)) +
-    geom_line(alpha = 0.8) +
-    geom_smooth(data = yearly_avg_melted, aes(x = Date, 
-                                              y = Value_Yearly, 
-                                              color = Variable), size = 1.2) +
-    labs(title = paste(plot_area_title, "Environmental Conditions (Monthly & Yearly Averages)"),
-         y = "Value",
-         x = "Date") +
-    theme_minimal() +
-    scale_color_manual(values = c("SST" = "red", "SBT" = "blue", "SSS" = "darkgreen")) +
-    facet_wrap(~ Variable, scales = "free_y", ncol = 1) +
-    theme(legend.position = "none")
-  
-  return(p)}
+  # Combine into final plot
+  return(wrap_plots(plot_list, nrow = 1))}
 
 
 # Functions for "data_analysis.Rmd"
@@ -338,7 +434,7 @@ plot_SSB_cpt <- function(data, changepoints, component, SSB_column, l_bnd_column
   # Create the base plot
   p <- ggplot(data) +
     geom_line(aes(x = year, y = .data[[SSB_column]]/1000000), linewidth = 0.8) +
-    labs(title = paste(component, "SSB Change-point analysis"), 
+    labs(title = component, 
          x = "Year", 
          y = "SSB in million t") +
     theme_minimal() +
