@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = normalizePath(".."))
 ```
 
 ## Load Packages
@@ -39,9 +39,9 @@ marine_components <- st_transform(marine_components, crs = 4326)
 
 # Calculate map extent with adjusted padding
 bbox <- st_bbox(marine_components)
-padding_east <- 8   # Add 3° more east (1 + 3)
-padding_west <- 2   # Remove 1° west (1 - 1)  
-padding_ns <- 0.5     # Reduce north/south by 0.5° (1 - 0.5)
+padding_east <- 8
+padding_west <- 4
+padding_ns <- 0.5
 
 map_extent <- list(
   lon_min = bbox["xmin"] - padding_west,
@@ -79,11 +79,11 @@ names(bathy_df) <- c("longitude", "latitude", "elevation")
 bathy_sea <- bathy_df %>%
   filter(!is.na(elevation), elevation <= 0) %>%
   mutate(depth = abs(elevation),
-         depth_capped = pmin(depth, 1000))  # Cap depth at 1000m for color scaling
+         depth_capped = pmin(depth, 500))  # Cap depth for color scaling
 
 topo_land <- bathy_df %>%
   filter(!is.na(elevation), elevation > 0) %>%
-  mutate(elevation_capped = pmin(elevation, 3000))  # Cap elevation for color scaling
+  mutate(elevation_capped = pmin(elevation, 500))  # Cap elevation for color scaling
 
 if (nrow(bathy_sea) == 0) {
   stop("No bathymetry data available for this region")
@@ -120,7 +120,7 @@ bathymetric_map <- ggplot() +
   # Bathymetry color scale (inverted viridis for shallow = light, deep = dark)
   scale_fill_viridis_c(option = "viridis",
                        trans = "sqrt",
-                       limits = c(0, 1000),
+                       limits = c(0, 500),
                        direction = -1,
                        guide = "none") +
   
@@ -144,7 +144,7 @@ bathymetric_map <- ggplot() +
   {if(exists("topo_land") && nrow(topo_land) > 0) {
     scale_fill_gradient(low = "grey40", high = "grey20",
                        trans = "sqrt",
-                       limits = c(0, 3000),
+                       limits = c(0, 500),
                        guide = "none",
                        aesthetics = "fill")
   }} +

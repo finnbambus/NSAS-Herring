@@ -626,7 +626,7 @@ plot_hysteresis <- function(data, break_years, component,
   p <- ggplot(data = data, aes(x = F, y = SSB_lag/1000000)) +
     geom_path(colour = "grey") +
     geom_point(colour = hyst_phases) +
-    labs(title = paste("Hysteresis in", component), x = "F", y = "SSB in millions") +
+    labs(title = component, x = "F", y = "SSB in millions") +
     theme_minimal() +
     theme(plot.title = element_text(hjust = 0.5))
   
@@ -892,9 +892,9 @@ plot_SRR <- function(data, break_years, title_stock, used_model,
     geom_path(colour = "grey") +
     geom_point(aes(color = factor(phase))) +
     scale_color_manual(values = colors[1:n_phases]) +
-    labs(title = paste("Stock-Recruitment Relationship for", title_stock), 
+    labs(title = title_stock, 
          subtitle = used_model,
-         x = "SSB in millions", 
+         x = "SSB in million t", 
          y = "R in billions") +
     theme_minimal() +
     theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"), 

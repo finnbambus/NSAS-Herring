@@ -183,13 +183,12 @@ plots_SSB_cpt$Downs
 ### Save plots
 
 ```{r}
-
 ggsave(filename = file.path("plots/", "SSB_cpt_components.png"),
        plot = grid.arrange(
          plots_SSB_cpt$SHOR + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
          plots_SSB_cpt$Buchan + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
-         plots_SSB_cpt$Banks + theme(axis.title.x = element_text(), axis.title.y = element_blank()),
-         plots_SSB_cpt$Downs + theme(axis.title.x = element_text(), axis.title.y = element_blank()),
+         plots_SSB_cpt$Banks + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
+         plots_SSB_cpt$Downs + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
          ncol = 2,
          bottom = "Year",
          left = "SSB in million t"),
@@ -295,10 +294,14 @@ plots_hysteresis$Downs
 
 ```{r}
 ggsave(filename = file.path("plots/", "hysteresis_components.png"),
-       plot = gridExtra::grid.arrange(plots_hysteresis$SHOR, 
-                                      plots_hysteresis$Buchan, 
-                                      plots_hysteresis$Banks, 
-                                      plots_hysteresis$Downs, ncol = 2),
+       plot = grid.arrange(
+         plots_hysteresis$SHOR + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
+         plots_hysteresis$Buchan + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
+         plots_hysteresis$Banks + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
+         plots_hysteresis$Downs + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
+         ncol = 2,
+         bottom = "F",
+         left = "SSB in million t"),
        bg = "white",
        width = 15,
        height = 10,
@@ -474,10 +477,14 @@ plots_SRR$Downs
 
 ```{r}
 ggsave(filename = file.path("plots/", "SRR_components.png"),
-       plot = gridExtra::grid.arrange(plots_SRR$SHOR, 
-                                      plots_SRR$Buchan, 
-                                      plots_SRR$Banks, 
-                                      plots_SRR$Downs, ncol = 2),
+       plot = grid.arrange(
+         plots_SRR$SHOR + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
+         plots_SRR$Buchan + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
+         plots_SRR$Banks + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
+         plots_SRR$Downs + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
+         ncol = 2,
+         bottom = "SSB in million t",
+         left = "R in billions"),
        bg = "white",
        width = 15,
        height = 10,
@@ -497,9 +504,9 @@ tGAM$SHOR <- merge(Herring$SHOR, env_df_subset[env_df_subset$Region == "Shetland
   dplyr::select(year, SSB_lag, R, Mean_SST, Mean_SBT, Mean_SSS)
 
 #### Run threshold gam function from "functions" with each variable
-run_threshold_gam(tGAM$SHOR, "R", "SSB_lag", "Mean_SST", "year") # FALSE, 9.631367
-run_threshold_gam(tGAM$SHOR, "R", "SSB_lag", "Mean_SBT", "year") # FALSE, 8.684516
-run_threshold_gam(tGAM$SHOR, "R", "SSB_lag", "Mean_SSS", "year") # FALSE, 35.22361
+run_threshold_gam(tGAM$SHOR, "R", "SSB_lag", "Mean_SST", "year") # FALSE, 9.692011
+run_threshold_gam(tGAM$SHOR, "R", "SSB_lag", "Mean_SBT", "year") # FALSE, 7.97895
+run_threshold_gam(tGAM$SHOR, "R", "SSB_lag", "Mean_SSS", "year") # FALSE, 35.08155
 
 #### No significant threshold effect found
 
@@ -511,11 +518,11 @@ tGAM$Buchan <- merge(Herring$Buchan, env_df_subset[env_df_subset$Region == "Buch
   dplyr::select(year, SSB_lag, R, Mean_SST, Mean_SBT, Mean_SSS)
 
 #### Run threshold gam function from "functions" with each variable
-run_threshold_gam(tGAM$Buchan, "R", "SSB_lag", "Mean_SST", "year") # FALSE, 10.10035
-run_threshold_gam(tGAM$Buchan, "R", "SSB_lag", "Mean_SBT", "year") # TRUE,  8.593926
-run_threshold_gam(tGAM$Buchan, "R", "SSB_lag", "Mean_SSS", "year") # FALSE, 34.67423
+run_threshold_gam(tGAM$Buchan, "R", "SSB_lag", "Mean_SST", "year") # FALSE, 10.13097
+run_threshold_gam(tGAM$Buchan, "R", "SSB_lag", "Mean_SBT", "year") # FALSE, 8.279129
+run_threshold_gam(tGAM$Buchan, "R", "SSB_lag", "Mean_SSS", "year") # FALSE, 34.77891
 
-#### Significant threshold effect found for SBT at 8.6°C
+#### No significant threshold effect found
 
 #---------------------------------------------------------------------
 
@@ -525,9 +532,9 @@ tGAM$Banks <- merge(Herring$Banks, env_df_subset[env_df_subset$Region == "Banks"
   dplyr::select(year, SSB_lag, R, Mean_SST, Mean_SBT, Mean_SSS)
 
 #### Run threshold gam function from "functions" with each variable
-run_threshold_gam(tGAM$Banks, "R", "SSB_lag", "Mean_SST", "year") # FALSE, 10.25506
-run_threshold_gam(tGAM$Banks, "R", "SSB_lag", "Mean_SBT", "year") # FALSE, 9.65014
-run_threshold_gam(tGAM$Banks, "R", "SSB_lag", "Mean_SSS", "year") # FALSE, 34.83148
+run_threshold_gam(tGAM$Banks, "R", "SSB_lag", "Mean_SST", "year") # FALSE, 10.24622
+run_threshold_gam(tGAM$Banks, "R", "SSB_lag", "Mean_SBT", "year") # FALSE, 9.523274
+run_threshold_gam(tGAM$Banks, "R", "SSB_lag", "Mean_SSS", "year") # FALSE, 34.43212
 
 #### No significant threshold effect found
 
@@ -539,9 +546,9 @@ tGAM$Downs <- merge(Herring$Downs, env_df_subset[env_df_subset$Region == "Downs"
   dplyr::select(year, SSB_lag, R, Mean_SST, Mean_SBT, Mean_SSS)
 
 #### Run threshold gam function from "functions" with each variable
-run_threshold_gam(tGAM$Downs, "R", "SSB_lag", "Mean_SST", "year") # FALSE, 11.89771
-run_threshold_gam(tGAM$Downs, "R", "SSB_lag", "Mean_SBT", "year") # FALSE, 11.8788
-run_threshold_gam(tGAM$Downs, "R", "SSB_lag", "Mean_SSS", "year") # FALSE, 33.42736
+run_threshold_gam(tGAM$Downs, "R", "SSB_lag", "Mean_SST", "year") # FALSE, 12.22224
+run_threshold_gam(tGAM$Downs, "R", "SSB_lag", "Mean_SBT", "year") # FALSE, 12.20646
+run_threshold_gam(tGAM$Downs, "R", "SSB_lag", "Mean_SSS", "year") # FALSE, 34.35818
 
 #### No significant threshold effect found
 ```
