@@ -94,8 +94,8 @@ The data raw Folder includes all data as it was received from its various source
 
     -   DOI: <https://doi.org/10.17895/ices.advice.27677718.v3>
 
--   **coords\_ component.csv** contains geographical data for each component. The data was estimated from the maps provided in "Mind the gaps: a state-space model for analysing the dynamics of North Sea herring spawning components" Payne, 2010 and others.
+-   **components_shp** contains geographical data for each component. The data was estimated from the maps provided in "Mind the gaps: a state-space model for analysing the dynamics of North Sea herring spawning components" Payne, 2010 and others.
 
-    -   Type: Geographical data for the spawning components of the NSAS herring.
+    -   Type: Shapefile data for the spawning components of the NSAS herring.
 
     -   DOI: <https://doi.org/10.1093/icesjms/fsq036>

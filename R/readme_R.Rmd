@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 The folder R contains all the R code used in this project.
 
--   **data_cleanup.Rmd** contains the R code to import and clean all necessary data from the "data raw" folder. The imported Data is saved to the "data" folder in the .Rdata format. In addition, Plots for a first glance and evaluation of the data are generated and saved to the "plots" folder.
+-   **data_cleanup** contains the R code to import and clean all necessary data from the "data raw" folder. The imported Data is saved to the "data" folder in the .Rdata format. In addition, Plots for a first glance and evaluation of the data are generated and saved to the "plots" folder.
 
     -   Use: Import raw data, save clean data & generate first plots.
     -   Variants: \_component the same analysis on the component level
@@ -28,5 +28,9 @@ The folder R contains all the R code used in this project.
 
     -   Use: It includes code used in the analysis for change points (Spawning Stock Biomass (SSB)), hysteresis and Stock Recruitment Relationship (SRR).
     -   Link: <https://github.com/HeleneGutte/tipping_northsea_fish/tree/main>
+
+-   **model_comp_functions** contains the functions used to compare and fit different models and return corresponding AIC and RSME.
+
+-   **map_component** contains the code to compile a bathymetric map of the North Sea including the areas of each component.
 
 -   **data_dump** contains currently unused code
