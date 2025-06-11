@@ -66,12 +66,12 @@ Herring_full <- read_csv("data raw/NSAS SSB 2025.csv") %>%
 ### *(SSB = SSB in Tonnes, cv = coefficient of variation, l_bnd = lower limit of 95% CI & u_bnd = upper limit of 95% CI)
 
 ## read ICES data & fill to lenght
-ICES_data <- read.table("data raw/NSAS ICES data 2024.txt", sep = ",", header = TRUE)
+ICES_data <- read.csv("data raw/NSAS ICES data 2024.txt", fill = TRUE)
 ICES_data[nrow(ICES_data) + 1, ] <- NA
 
 ### Add F & R from to Herring_full
 Herring_full$F <- ICES_data$F
-Herring_full$R <- ICES_data$Recruitment
+Herring_full$Recruitment <- ICES_data$Recruitment
   
 
 ## Split SSB Data by components & 95% bounds by component percentage and attach it and LAI percent data to SSB
@@ -80,7 +80,7 @@ Herring_LAI <- Herring_full %>%
   mutate(SSB_component = SSB * (LAI_perc. / 100),
          l_bnd_component = l_bnd * (LAI_perc. / 100),
          u_bnd_component = u_bnd * (LAI_perc. / 100)) %>%
-  dplyr::select(year, component, LAI_perc., SSB_component, l_bnd_component, u_bnd_component, F, R) %>%
+  dplyr::select(year, component, LAI_perc., SSB_component, l_bnd_component, u_bnd_component, F, Recruitment) %>%
   drop_na()
 ```
 
@@ -103,6 +103,29 @@ env_df_full <- c("SST", "SBT", "SSS") %>%
   filter(year != max(year)) %>%
   pivot_wider(names_from = Variable, values_from = Mean_Value, names_prefix = "mean_") %>%
   arrange(year)
+```
+
+### CPR data import
+
+```{r}
+### Read data
+cpr_small <- read.csv("data raw/NS CPR/CPR_RegimeShift_Data_SmallZooplankton_10062025.csv")
+cpr_phyto <- read.csv("data raw/NS CPR/CPR_RegimeShift_Data_Phytoplankton_10062025.csv")
+
+### Call "Process" function from functions
+cpr_full <- list()
+cpr_full$phyto <- process_food_availability(cpr_phyto)
+cpr_full$small <- process_food_availability(cpr_small)
+
+cpr_component <- list()
+cpr_component$phyto <- process_food_availability(cpr_phyto, "data raw/components_shp/components.shp", "component")
+cpr_component$small <- process_food_availability(cpr_small, "data raw/components_shp/components.shp", "component")
+
+### Test data quality
+test_data_quality(cpr_full$phyto)       # Both metrics usable
+test_data_quality(cpr_full$small)       # Both metrics usable
+test_data_quality(cpr_component$phyto)  # Both metrics usable
+test_data_quality(cpr_component$small)  # Both metrics usable
 ```
 
 ### Splitting environmental data by components
@@ -212,6 +235,10 @@ save(env_data_full, file = file.path("data/", "env_data_full.Rdata"))
 save(env_df_full, file = file.path("data/", "env_df_full.Rdata"))
 save(env_data_subset, file = file.path("data/", "env_data_subset.Rdata"))
 save(env_df_subset, file = file.path("data/", "env_df_subset.Rdata"))
+
+#### CPR data
+save(cpr_full, file = file.path("data/", "cpr_full.Rdata"))
+save(cpr_component, file = file.path("data/", "cpr_component.Rdata"))
 ```
 
 ## Save plots

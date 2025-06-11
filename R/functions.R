@@ -59,6 +59,260 @@ load_environmental_data <- function(sst_file, sbt_file, sss_file) {
 
 
 #--------------------------------------------------------------------------------------
+## Process CPR data
+#--------------------------------------------------------------------------------------
+
+process_food_availability <- function(cpr_data, 
+                                      shapefile_path = NULL, 
+                                      polygon_id_column = "NAME") {
+  
+  # Helper function to assign seasons
+  assign_season <- function(month) {
+    case_when(
+      month %in% c(3, 4, 5) ~ "Spring",
+      month %in% c(6, 7, 8) ~ "Summer", 
+      month %in% c(9, 10, 11) ~ "Autumn",
+      month %in% c(12, 1, 2) ~ "Winter",
+      TRUE ~ NA_character_
+    )
+  }
+  
+  # Step 1: Calculate food availability for each sample
+  processed_data <- cpr_data %>%
+    rowwise() %>%
+    mutate(
+      food_availability = sum(c_across(starts_with("X")), na.rm = TRUE),
+      Season = assign_season(Month)
+    ) %>%
+    ungroup() %>%
+    # Remove rows with missing temporal data
+    filter(!is.na(Year), !is.na(Season))
+  
+  # Step 2: Handle spatial aggregation if shapefile provided
+  if (!is.null(shapefile_path)) {
+    
+    cat("Processing with spatial aggregation...\n")
+    
+    # Load shapefile
+    polygons <- st_read(shapefile_path, quiet = TRUE)
+    
+    # Convert to spatial points (remove rows with missing coordinates)
+    spatial_data <- processed_data %>%
+      filter(!is.na(Longitude), !is.na(Latitude)) %>%
+      st_as_sf(coords = c("Longitude", "Latitude"), crs = st_crs(polygons))
+    
+    # Spatial join
+    points_in_polygons <- st_join(spatial_data, polygons)
+    
+    # Aggregate by region, year, and season
+    result <- points_in_polygons %>%
+      st_drop_geometry() %>%
+      filter(!is.na(.data[[polygon_id_column]])) %>%
+      group_by(region = .data[[polygon_id_column]], Year, Season) %>%
+      summarise(
+        total_food = sum(food_availability, na.rm = TRUE),
+        average_food = mean(food_availability, na.rm = TRUE),
+        sample_count = length(food_availability),
+        .groups = 'drop'
+      ) %>%
+      arrange(region, Year, Season)
+    
+    cat("Spatial aggregation complete.\n")
+    cat("Regions found:", length(unique(result$region)), "\n")
+    
+  } else {
+    
+    cat("Processing without spatial aggregation...\n")
+    
+    # Aggregate by year and season only (no spatial separation)
+    result <- processed_data %>%
+      group_by(Year, Season) %>%
+      summarise(
+        total_food = sum(food_availability, na.rm = TRUE),
+        average_food = mean(food_availability, na.rm = TRUE),
+        sample_count = length(food_availability),
+        .groups = 'drop'
+      ) %>%
+      arrange(Year, Season)
+    
+    cat("Temporal aggregation complete.\n")
+  }
+  
+  # Step 3: Add summary information
+  cat("\n=== PROCESSING SUMMARY ===\n")
+  cat("Input samples:", nrow(cpr_data), "\n")
+  cat("Output records:", nrow(result), "\n")
+  cat("Year range:", min(result$Year), "-", max(result$Year), "\n")
+  cat("Seasons:", paste(unique(result$Season), collapse = ", "), "\n")
+  
+  if ("region" %in% names(result)) {
+    cat("Spatial regions:", length(unique(result$region)), "\n")
+  }
+  
+  # Data quality summary
+  cat("\n=== DATA QUALITY ===\n")
+  cat("Mean samples per record:", round(mean(result$sample_count), 1), "\n")
+  cat("Records with <5 samples:", sum(result$sample_count < 5), "\n")
+  cat("Mean food availability:", round(mean(result$average_food), 1), "\n")
+  
+  return(result)
+}
+
+
+#--------------------------------------------------------------------------------------
+## CPR testing
+#--------------------------------------------------------------------------------------
+
+# ==========================================
+# SIMPLIFIED DATA QUALITY TESTING
+# ==========================================
+
+test_data_quality <- function(food_data) {
+  
+  cat("=== DATA QUALITY ASSESSMENT ===\n\n")
+  
+  # Test both average and total food
+  cat("--- TESTING AVERAGE FOOD ---\n")
+  avg_results <- assess_column(food_data, "average_food")
+  
+  cat("\n--- TESTING TOTAL FOOD ---\n")
+  total_results <- assess_column(food_data, "total_food")
+  
+  # Simple recommendation
+  cat("\n=== FINAL RECOMMENDATION ===\n")
+  if (avg_results$usable && total_results$usable) {
+    cat("✓ Both metrics usable - use average_food for standardized comparisons\n")
+  } else if (avg_results$usable) {
+    cat("! Use average_food - total_food has quality issues\n")
+  } else if (total_results$usable) {
+    cat("! Use total_food - average_food has quality issues\n")
+  } else {
+    cat("X Both metrics have issues - preprocessing required\n")
+  }
+  
+  # Return nothing (invisible)
+  invisible()
+}
+
+# Internal function to assess individual columns
+assess_column <- function(food_data, test_column) {
+  
+  test_values <- food_data[[test_column]][is.finite(food_data[[test_column]])]
+  
+  # Basic metrics
+  n <- length(test_values)
+  zero_count <- sum(test_values == 0)
+  zero_percent <- (zero_count / n) * 100
+  
+  if (n > 1) {
+    cv <- sd(test_values, na.rm = TRUE) / mean(test_values, na.rm = TRUE)
+    mean_val <- mean(test_values, na.rm = TRUE)
+    median_val <- median(test_values, na.rm = TRUE)
+  } else {
+    cv <- NA
+    mean_val <- test_values[1]
+    median_val <- test_values[1]
+  }
+  
+  # Outlier detection
+  if (n >= 4) {
+    Q1 <- quantile(test_values, 0.25, na.rm = TRUE)
+    Q3 <- quantile(test_values, 0.75, na.rm = TRUE)
+    IQR <- Q3 - Q1
+    extreme_outliers <- sum(test_values < (Q1 - 3*IQR) | test_values > (Q3 + 3*IQR))
+    extreme_outlier_percent <- (extreme_outliers / n) * 100
+  } else {
+    extreme_outlier_percent <- 0
+  }
+  
+  # Quality assessment
+  critical_issues <- c()
+  major_issues <- c()
+  minor_issues <- c()
+  
+  # Print quality checks as we go
+  
+  # Critical checks
+  if (n < 10) {
+    critical_issues <- c(critical_issues, "insufficient_sample_size")
+    cat("X Sample size =", n, "(< 10) - Insufficient for robust statistics\n")
+  } else {
+    cat("✓ Sample size =", n, "(>= 10)\n")
+  }
+  
+  # Major checks
+  if (zero_percent > 30) {
+    major_issues <- c(major_issues, "excessive_zeros")
+    cat("X Zero values =", round(zero_percent, 1), "% (> 30%) - Excessive zeros\n")
+  } else if (zero_percent > 15) {
+    minor_issues <- c(minor_issues, "moderate_zeros")
+    cat("! Zero values =", round(zero_percent, 1), "% (> 15%) - Moderate level\n")
+  } else {
+    cat("✓ Zero values =", round(zero_percent, 1), "% (<= 15%)\n")
+  }
+  
+  if (is.finite(cv)) {
+    if (cv > 4) {
+      major_issues <- c(major_issues, "extreme_variability")
+      cat("X CV =", round(cv, 2), "(> 4.0) - Extreme variability\n")
+    } else if (cv > 2.5) {
+      minor_issues <- c(minor_issues, "high_variability")
+      cat("! CV =", round(cv, 2), "(> 2.5) - High but acceptable\n")
+    } else {
+      cat("✓ CV =", round(cv, 2), "(<= 2.5)\n")
+    }
+  }
+  
+  if (extreme_outlier_percent > 10) {
+    major_issues <- c(major_issues, "excessive_extreme_outliers")
+    cat("X Extreme outliers =", round(extreme_outlier_percent, 1), "% (> 10%) - Likely data errors\n")
+  } else {
+    cat("✓ Outliers =", round(extreme_outlier_percent, 1), "% (<= 10%) - Acceptable range\n")
+  }
+  
+  # Mean-median ratio check
+  if (is.finite(mean_val) && is.finite(median_val) && median_val > 0) {
+    mean_median_ratio <- mean_val / median_val
+    if (mean_median_ratio > 5 || mean_median_ratio < 0.2) {
+      minor_issues <- c(minor_issues, "extreme_skewness")
+      cat("! Mean/Median ratio =", round(mean_median_ratio, 2), "- Highly skewed\n")
+    } else {
+      cat("✓ Mean/Median ratio =", round(mean_median_ratio, 2), "- Acceptable skewness\n")
+    }
+  }
+  
+  # Negative values check
+  min_val <- min(test_values, na.rm = TRUE)
+  if (min_val < 0) {
+    major_issues <- c(major_issues, "negative_values")
+    cat("X Negative values detected (min =", min_val, ") - Invalid for abundance\n")
+  } else {
+    cat("✓ All values >= 0 - Appropriate for abundance data\n")
+  }
+  
+  # Final determination
+  if (length(critical_issues) > 0) {
+    usable <- FALSE
+    cat("X QUALITY: UNUSABLE - Critical issues detected\n")
+  } else if (length(major_issues) > 2) {
+    usable <- FALSE  
+    cat("X QUALITY: UNUSABLE - Too many major issues\n")
+  } else if (length(major_issues) > 0) {
+    usable <- TRUE
+    cat("! QUALITY: USABLE WITH CAUTION - Minor issues detected\n")
+  } else if (length(minor_issues) > 3) {
+    usable <- TRUE
+    cat("! QUALITY: USABLE - Multiple minor issues but acceptable\n")
+  } else {
+    usable <- TRUE
+    cat("✓ QUALITY: GOOD - Suitable for analysis\n")
+  }
+  
+  return(list(usable = usable))
+}
+
+
+#--------------------------------------------------------------------------------------
 ## Subset environmental data by components with shapefile
 #--------------------------------------------------------------------------------------
 
@@ -684,7 +938,7 @@ plot_hysteresis <- function(data, break_years, component,
 ## Extract SSR Breakpoints
 #--------------------------------------------------------------------------------------
 
-srr_breakpoint_analysis <- function(data, ssb_col = "SSB", r_col = "R", year_col = "year",
+srr_breakpoint_analysis <- function(data, ssb_col = "SSB", r_col = "Recruitment", year_col = "year",
                                     region_name = "Region", plot_breakpoints = TRUE, 
                                     method = "strucchange", initial_psi = NULL) {
   
@@ -853,7 +1107,7 @@ srr_breakpoint_analysis <- function(data, ssb_col = "SSB", r_col = "R", year_col
 #--------------------------------------------------------------------------------------
 
 plot_SRR <- function(data, break_years, title_stock, used_model,
-                     ssb_col = "SSB", r_col = "R", year_col = "year",
+                     ssb_col = "SSB", r_col = "Recruitment", year_col = "year",
                      Blim = 828874,
                      show_Blim = TRUE,  # New argument to control Blim display
                      colors = c("steelblue", "darkorange", "purple", "lightgreen", "indianred", "darkred", "darkblue"),

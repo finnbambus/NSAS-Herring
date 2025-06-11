@@ -1,0 +1,140 @@
+accepted_id,aphia_id,name_cpr,name_worms,DRI
+101,149055,Paralia sulcata,Paralia sulcata,1958
+102,149074,Skeletonema costatum,Skeletonema costatum,1958
+103,148912,Thalassiosira spp.,Thalassiosira,1958
+104,179785,Dactyliosolen antarcticus,Dactyliosolen antarcticus,1958
+107,149629,Rhizosolenia styliformis,Rhizosolenia styliformis,1958
+108,149070,Rhizosolenia hebetata semispina,Rhizosolenia semispina,1958
+112,370366,Chaetoceros(Hyalochaete) spp.,Chaetoceros Hyalochaete,1958
+113,370367,Chaetoceros(Phaeoceros) spp.,Chaetoceros Phaeoceros,1958
+114,149095,Odontella sinensis,Odontella sinensis,1958
+116,157083,Thalassiothrix longissima,Thalassiothrix longissima,1958
+117,985570,Thalassionema nitzschioides,Synedra nitzschioides f. nitzschioides,1958
+121,840626,Ceratium fusus,Tripos fusus,1958
+122,840627,Ceratium furca,Tripos furca,1958
+123,837459,Ceratium lineatum,Tripos lineatus,1958
+124,495363,Ceratium tripos,Tripos muelleri,1958
+125,841260,Ceratium macroceros,Tripos macroceros,1958
+126,837453,Ceratium horridum,Tripos horridus,1958
+127,841259,Ceratium longipes,Tripos longipes,1958
+128,836815,Ceratium arcticum,Tripos arcticus,1958
+132,109555,Pyrophacus spp.,Pyrophacus,1975
+133,109901,Polykrikos schwartzii cysts,Polykrikos schwartzii,1993
+151,148947,Actinoptychus spp.,Actinoptychus,1960
+152,162254,Asteromphalus spp.,Asteromphalus,1958
+154,149118,Bacteriastrum spp.,Bacteriastrum,1958
+155,149306,Bellerochea malleus,Bellerochea malleus,1958
+156,699394,Biddulphia alternans,Trigonium alternans,1958
+157,149050,Odontella aurita,Odontella aurita,1958
+158,1322477,Odontella granulata,Cerataulus granulata,1958
+159,1322477,Odontella obtusa,Odontella obtusa,1961
+160,149662,Odontella regia,Odontella regia,1958
+161,163288,Odontella rhombus,Zygoceros rhombus,1958
+162,149619,Cerataulina pelagica,Cerataulina pelagica,1958
+165,148992,Coscinodiscus concinnus,Coscinodiscus concinnus,1958
+166,148917,Coscinodiscus spp. (Unidentified),Coscinodiscus,1958
+167,149286,Detonula confervacea,Detonula confervacea,1963
+168,149023,Ditylum brightwellii,Ditylum brightwellii,1958
+169,149131,Eucampia zodiacus,Eucampia zodiacus,1958
+171,149132,Guinardia flaccida,Guinardia flaccida,1958
+172,149033,Gyrosigma spp.,Gyrosigma,1958
+173,163248,Hemiaulus spp.,Hemiaulus,1959
+175,149106,Leptocylindrus danicus,Leptocylindrus danicus,1958
+176,149142,Navicula spp.,Navicula,1958
+177,149004,Cylindrotheca closterium,Cylindrotheca closterium,1958
+178,149066,Rhaphoneis amphiceros,Rhaphoneis amphiceros,1958
+180,196805,Rhizosolenia acuminata,Rhizosolenia acuminata,1961
+182,196811,Rhizosolenia bergonii,Rhizosolenia bergonii,1958
+187,149115,Rhizosolenia setigera,Rhizosolenia setigera,1958
+190,149630,Stephanopyxis spp.,Stephanopyxis,1958
+192,149084,Surirella spp.,Surirella,1960
+194,115106,Phaeocystis pouchetii,Phaeocystis pouchetii,1958
+198,157256,Silicoflagellates,Dictyochales,1993
+200,164116,Odontella mobiliensis,Odontella mobiliensis,1958
+203,160594,Pachysphaera spp.,Pachysphaera,1973
+221,841182,Ceratium arietinum,Tripos arietinus,1958
+222,837310,Ceratium azoricum,Tripos azoricus,1958
+224,841190,Ceratium bucephalum,Tripos bucephalus,1958
+225,841191,Ceratium buceros,Tripos buceros,1958
+227,837448,Ceratium carriense,Tripos carriensis,1958
+228,841199,Ceratium compressum,Tripos compressus,1963
+229,841202,Ceratium declinatum,Tripos declinatus,1959
+232,841248,Ceratium hexacanthum,Tripos hexacanthus,1958
+235,837457,Ceratium lamellicorne,Tripos lamellicornis,1965
+237,841261,Ceratium massiliense,Tripos massiliensis,1958
+238,841263,Ceratium minutum,Tripos minutus,1958
+246,1381154,Ceratium teres,Tripos teres,1958
+247,842517,Ceratium trichoceros,Tripos trichoceros,1961
+250,109509,Cladopyxis spp.,Cladopyxis,1965
+253,109519,Gonyaulax spp.,Gonyaulax,1960
+254,109528,Oxytoxum spp.,Oxytoxum,1958
+255,109553,Protoperidinium spp.,Protoperidinium,1958
+257,109550,Podolampas spp.,Podolampas,1960
+258,109903,Pronoctiluca pelagica,Pronoctiluca pelagica,1958
+264,109888,Ptychodiscus noctiluca,Ptychodiscus noctiluca,1969
+266,196830,Cystodinium spp.,Cystodinium,1967
+268,109571,Pyrocystis spp.,Pyrocystis,1965
+271,109538,Glenodinium spp.,Glenodinium,1966
+275,109475,Gymnodinium spp.,Gymnodinium,1974
+750,109921,Noctiluca scintillans,Noctiluca scintillans,1981
+806,172818,Hexasterias problematica,Polyasterias problematica,1996
+818,109466,Phalacroma spp.,Phalacroma,1996
+947,149018,Diploneis spp.,Diploneis,1981
+950,109545,Scrippsiella spp.,Scrippsiella,1982
+956,110178,Blepharocysta paulsenii,Blepharocysta paulsenii,1987
+971,149170,Triceratium favus,Triceratium favus,1977
+975,984641,Nitzschia sigma rigida,Nitzschia sigma var. rigida,1977
+976,156632,Coscinodiscus wailesii,Coscinodiscus wailesii,1977
+980,109717,Actiniscus pentasterias,Actiniscus pentasterias,1980
+981,149150,Nitzschia longissima,Nitzschia longissima,1979
+984,109476,Gyrodinium spp.,Gyrodinium,1978
+1000,149168,Proboscia alata,Proboscia alata,1958
+1001,149230,Leptocylindrus mediterraneus,Leptocylindrus mediterraneus,1958
+1002,341501,Proboscia inermis,Proboscia inermis,1958
+1590,149322,Lithodesmium undulatum,Lithodesmium undulatum,2002
+1601,109603,Dinophysis acuminata,Dinophysis acuminata,2004
+1602,109604,Dinophysis acuta,Dinophysis acuta,2004
+1603,109612,Dinophysis caudata,Dinophysis caudata,2004
+1604,109637,Dinophysis norvegica,Dinophysis norvegica,2004
+1606,232261,Dinophysis sacculus,Dinophysis sacculus,2004
+1607,109662,Dinophysis tripos,Dinophysis tripos,2004
+1612,370366,Hyalochaete resting spore,Chaetoceros Hyalochaete,2005
+1621,149313,Fragilariopsis spp,Fragilariopsis,2005
+1623,148971,Small Centric Diatoms (Unidentified),Coscinodiscophycidae,2005
+1624,149335,Grammatophora spp.,Grammatophora,2006
+1627,162927,Nitzschia bicapitata,Nitzschia bicapitata,2005
+1632,149309,Dactyliosolen spp.,Dactyliosolen,2005
+1634,149130,Eucampia spp.,Eucampia,2005
+1639,149069,Rhizosolenia spp.,Rhizosolenia,2005
+1679,110303,Prorocentrum micans,Prorocentrum micans,2007
+1681,110298,Prorocentrum dentatum,Prorocentrum dentatum,2007
+10375,162793,Phalacroma rotundatum,Phalacroma rotundatum,2004
+10615,149139,Asterionellopsis glacialis,Asterionellopsis glacialis,1958
+10618,1322468,Odontella longicruris,Hobaniella longicruris,2002
+10620,109566,Prorocentrum spp. (Exuviaella type),Prorocentrum,1960
+10622,341542,Ephemera planamembranacea,Ephemera planamembranacea,1962
+10623,149153,Pseudo-nitzschia delicatissima complex,Pseudo-nitzschia delicatissima,1958
+10624,149152,Pseudo-nitzschia seriata complex,Pseudo-nitzschia seriata,1958
+10625,177604,Trichodesmium spp.,Trichodesmium,1958
+10626,149060,Podosira stelligera,Podosira stelligera,1974
+10629,163344,Pseudosolenia calcar-avis,Pseudosolenia calcar-avis,1960
+10630,163241,Guinardia cylindrus,Guinardia cylindrus,1965
+10631,149112,Guinardia delicatula,Guinardia delicatula,1958
+10632,149310,Dactyliosolen fragilissimus,Dactyliosolen fragilissimus,1958
+10633,345491,Neocalyptrella robusta,Neocalyptrella robusta,1980
+10634,149113,Guinardia striata,Guinardia striata,1958
+10636,149647,Detonula pumila,Detonula pumila,1959
+10637,149145,Meuniera membranacea,Meuniera membranacea,1974
+10638,157440,Helicotheca tamesis,Helicotheca tamesis,1958
+10641,149135,Lauderia annulata,Lauderia annulata,1958
+10668,19542,Dinophyceae unidentified,Dinophyceae,2010
+10680,163728,Bacillaria paxillifera,Vibrio paxillifer,1958
+10681,179596,Corethron hystrix,Corethron hystrix,1958
+10682,613575,Proboscia curvirostris,Proboscia curvirostris,1958
+10683,231887,Proboscia indica,Rhizosolenia indica,1958
+10684,149116,Rhizosolenia imbricata,Rhizosolenia imbricata,1958
+10745,494057,Ceratium spp. unidentified,Tripos,2014
+10754,149151,Nitzschia/Pseudo-nitzschia spp. (unidentified),Pseudo-nitzschia,1958
+10755,447730,Bellerochea horologicalis,Bellerochea horologicalis,2020
+10757,231788,Karenia-type cyst,Karenia,2021
+10759,830,brown algae sporophyte,Phaeophyceae,2021
