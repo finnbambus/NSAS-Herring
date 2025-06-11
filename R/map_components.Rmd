@@ -24,31 +24,20 @@ library(grid)
 ```
 
 ```{r}
-# Read the combined shapefile
-shapefile_path <- "data raw/components_shp/components.shp"
-
-if (!file.exists(shapefile_path)) {
-  stop("Combined shapefile not found! Run the combining script first.")
-}
-
-cat("Reading combined shapefile:", shapefile_path, "\n")
-marine_components <- st_read(shapefile_path, quiet = TRUE)
-
 # Ensure WGS84 projection
 marine_components <- st_transform(marine_components, crs = 4326)
 
 # Calculate map extent with adjusted padding
 bbox <- st_bbox(marine_components)
 padding_east <- 8
-padding_west <- 4
+padding_west <- 5
 padding_ns <- 0.5
 
 map_extent <- list(
   lon_min = bbox["xmin"] - padding_west,
   lon_max = bbox["xmax"] + padding_east,
   lat_min = bbox["ymin"] - padding_ns,
-  lat_max = bbox["ymax"] + padding_ns
-)
+  lat_max = bbox["ymax"] + padding_ns)
 
 cat("Map extent:\n")
 cat("  Longitude:", round(map_extent$lon_min, 1), "to", round(map_extent$lon_max, 1), "\n")
@@ -72,30 +61,28 @@ extent_poly <- st_polygon(list(matrix(c(
 elevation_data <- get_elev_raster(extent_poly, z = 6)
 
 # Convert to data frame and process elevation data
-bathy_df <- as.data.frame(elevation_data, xy = TRUE)
+bathy_df <- raster::as.data.frame(elevation_data, xy = TRUE)
 names(bathy_df) <- c("longitude", "latitude", "elevation")
 
 # Separate land and sea data
 bathy_sea <- bathy_df %>%
   filter(!is.na(elevation), elevation <= 0) %>%
   mutate(depth = abs(elevation),
-         depth_capped = pmin(depth, 500))  # Cap depth for color scaling
+         depth_capped = pmin(depth, 1000))  # Cap depth for color scaling
 
 topo_land <- bathy_df %>%
   filter(!is.na(elevation), elevation > 0) %>%
-  mutate(elevation_capped = pmin(elevation, 500))  # Cap elevation for color scaling
+  mutate(elevation_capped = pmin(elevation, 1000))  # Cap elevation for color scaling
 
 if (nrow(bathy_sea) == 0) {
-  stop("No bathymetry data available for this region")
-}
+  stop("No bathymetry data available for this region")}
 
 cat("Bathymetry data successfully processed!\n")
 cat("Depth range:", min(bathy_sea$depth), "to", max(bathy_sea$depth), "meters\n")
 
 if (nrow(topo_land) > 0) {
   cat("Topography data successfully processed!\n")
-  cat("Elevation range:", min(topo_land$elevation), "to", max(topo_land$elevation), "meters\n")
-}
+  cat("Elevation range:", min(topo_land$elevation), "to", max(topo_land$elevation), "meters\n")}
 
 # Get coastline data
 world <- ne_countries(scale = "medium", returnclass = "sf")
@@ -107,8 +94,7 @@ component_centroids <- marine_components %>%
   mutate(
     centroid = st_centroid(geometry),
     lon = st_coordinates(centroid)[,1],
-    lat = st_coordinates(centroid)[,2]
-  )
+    lat = st_coordinates(centroid)[,2])
 
 # Create bathymetric map with corrected layer hierarchy
 bathymetric_map <- ggplot() +
@@ -118,11 +104,11 @@ bathymetric_map <- ggplot() +
               alpha = 0.8) +
   
   # Bathymetry color scale (inverted viridis for shallow = light, deep = dark)
-  scale_fill_viridis_c(option = "viridis",
-                       trans = "sqrt",
-                       limits = c(0, 500),
-                       direction = -1,
-                       guide = "none") +
+  scale_fill_gradientn(colors = c("#f8fbfb", "#67bfbc", "#0f4473", "#0d0f19"),
+                     values = c(0, 0.25, 0.75, 1),  # Where each color appears (0=shallow, 1=deep)
+                     trans = "sqrt",
+                     limits = c(0, 1000),
+                     guide = "none") +
   
   # Add new fill scale for land topography
   new_scale_fill() +
@@ -137,17 +123,20 @@ bathymetric_map <- ggplot() +
   {if(exists("topo_land") && nrow(topo_land) > 0) {
     geom_raster(data = topo_land, 
                 aes(x = longitude, y = latitude, fill = elevation_capped),
-                alpha = 1)
-  }} +
+                alpha = 1)}} +
   
   # Land topography color scale (black for high, grey for flat)
   {if(exists("topo_land") && nrow(topo_land) > 0) {
-    scale_fill_gradient(low = "grey40", high = "grey20",
-                       trans = "sqrt",
-                       limits = c(0, 500),
-                       guide = "none",
-                       aesthetics = "fill")
-  }} +
+    scale_fill_gradientn(colors = c("#bbbbbb", "gray45", "gray30"),
+                     values = c(0, 0.6, 1),  # Where each color appears (0=shallow, 1=deep)
+                     trans = "sqrt",
+                     limits = c(0, 1000),
+                     guide = "none")}} +
+    
+  geom_sf(data = world,
+          fill = NA,
+          color = "black",
+          linewidth = 0.25) +
   
   # Layer 4: Add component labels (top layer - appears over everything)
   geom_text(data = component_centroids,
@@ -171,8 +160,7 @@ bathymetric_map <- ggplot() +
     panel.grid.major = element_line(color = "white", linewidth = 0.3),
     panel.grid.minor = element_blank(),
     panel.background = element_rect(fill = "white", color = NA),
-    plot.background = element_rect(fill = "white", color = NA)
-  )
+    plot.background = element_rect(fill = "white", color = NA))
 
 # Display the map
 #print(bathymetric_map)
@@ -183,5 +171,4 @@ ggsave(filename = file.path("plots/", "component_map.png"),
        width = 15, height = 15, 
        dpi = 300, 
        bg = "white")
-
 ```
