@@ -84,77 +84,58 @@ Herring_LAI <- Herring_full %>%
   drop_na()
 ```
 
-## Environmental .nc data import
+## Environmental data import
 
 ```{r}
-## Load function from "functions.R"
+### Load functions from "functions.R"
 source("R/functions.R")
 
-## Call function and store in environment
+### Call load_enironment_data" from functions and store in environment
 env_data_full <- load_environmental_data("data raw/NS SST Monthly.nc", "data raw/NS SBT Monthly.nc", "data raw/NS SSS Monthly.nc")
 
-## Break down into df and year average
-env_df_full <- c("SST", "SBT", "SSS") %>%
-  map_dfr(~ data.frame(Value = as.vector(env_data_full[[.x]]), 
-                       year = rep(env_data_full$years, each = dim(env_data_full[[.x]])[1] * dim(env_data_full[[.x]])[2]),
-                       Variable = .x)) %>%
-  group_by(year, Variable) %>%
-  summarise(Mean_Value = mean(Value, na.rm = TRUE), .groups = 'drop') %>%
-  filter(year != max(year)) %>%
-  pivot_wider(names_from = Variable, values_from = Mean_Value, names_prefix = "mean_") %>%
-  arrange(year)
+### Call process_env_data and save as data frame for full stock
+#### Full Stock
+env_df_full <- process_env_data_seasonal(env_data_full)
+
+#### Components
+env_df_subset <- process_env_data_seasonal(env_data_full, shapefile_path = "data raw/components_shp/components.shp", polygon_id_column = "component")
+
+### Clear large data
+env_data_full <- NULL
 ```
 
-### CPR data import
+## CPR data import
 
 ```{r}
-### Read data
+### Read data to environment
 cpr_small <- read.csv("data raw/NS CPR/CPR_RegimeShift_Data_SmallZooplankton_10062025.csv")
 cpr_phyto <- read.csv("data raw/NS CPR/CPR_RegimeShift_Data_Phytoplankton_10062025.csv")
 
-### Call "Process" function from functions
+### Call "Process_food_availability" from functions and save as df in lists
+#### Full Stock
 cpr_full <- list()
 cpr_full$phyto <- process_food_availability(cpr_phyto)
 cpr_full$small <- process_food_availability(cpr_small)
 
+#### Components
 cpr_component <- list()
 cpr_component$phyto <- process_food_availability(cpr_phyto, "data raw/components_shp/components.shp", "component")
 cpr_component$small <- process_food_availability(cpr_small, "data raw/components_shp/components.shp", "component")
 
-### Test data quality
+### Clear large data
+cpr_small <- NULL
+cpr_phyto <- NULL
+
+### Call "test_data_quality" from functions
 test_data_quality(cpr_full$phyto)       # Both metrics usable
 test_data_quality(cpr_full$small)       # Both metrics usable
 test_data_quality(cpr_component$phyto)  # Both metrics usable
 test_data_quality(cpr_component$small)  # Both metrics usable
 ```
 
-### Splitting environmental data by components
+# Visual investigation
 
-```{r}
-## Call the function and store result in environment (function in "functions.R")
-env_data_subset <- subset_environmental_data_shapefile(env_data_full, "data raw/components_shp/components.shp", "component")
-
-## Break down into df and year average
-env_df_subset <- names(env_data_subset) %>%
-  map_dfr(~ {
-    region_data <- env_data_subset[[.x]]
-    c("SST", "SBT", "SSS") %>%
-      map_dfr(function(var) {
-        data.frame(
-          Value = as.vector(region_data[[var]]), 
-          year = rep(region_data$years, each = dim(region_data[[var]])[1] * dim(region_data[[var]])[2]),
-          Variable = var,
-          Region = .x)})}) %>%
-  group_by(Region, year, Variable) %>%
-  summarise(Mean_Value = mean(Value, na.rm = TRUE), .groups = 'drop') %>%
-  filter(year != max(year)) %>%  # Remove the last (incomplete) year
-  pivot_wider(names_from = Variable, values_from = Mean_Value, names_prefix = "Mean_") %>%
-  arrange(Region, year)
-```
-
-# First visual investigation
-
-## LAI data visualization
+## LAI visualization
 
 ```{r}
 ## Plot timeseries of LAI by component
@@ -208,14 +189,17 @@ plot_SSB_component_b <- ggplot(Herring_LAI, aes(x = year, y = SSB_component / 1e
 plot_SSB_component_b
 ```
 
-## Environmental data visualization
+## Environmental CPR visualization
 
 ```{r}
-### Call "plot_env_data"
+### As factor for intendet component order
 env_df_subset$Region <- factor(env_df_subset$Region, 
                               levels = c("Shetland_Orkney", "Buchan", "Banks", "Downs"))
+### Call "plot_env_data"
+plot_env_grid <- plot_env_data_dual(env_df_full, env_df_subset,
+                                    cpr_full_data = cpr_full, 
+                                    cpr_component_data = cpr_component)
 
-plot_env_grid <- plot_env_data(env_df_full, env_df_subset)
 print(plot_env_grid)
 ```
 
@@ -233,7 +217,6 @@ save(Herring_LAI, file = file.path("data/", "Herring_LAI.Rdata"))
 ### Environmental data
 save(env_data_full, file = file.path("data/", "env_data_full.Rdata"))
 save(env_df_full, file = file.path("data/", "env_df_full.Rdata"))
-save(env_data_subset, file = file.path("data/", "env_data_subset.Rdata"))
 save(env_df_subset, file = file.path("data/", "env_df_subset.Rdata"))
 
 #### CPR data

@@ -26,7 +26,11 @@ library(MASS)
 library(hydroGOF)
 library(mgcv)
 library(INDperform)
-library(gridExtra)
+library(dplyr)
+library(purrr)
+library(progress)
+library(segmented)
+library(FLCore)
 ```
 
 ## Import data
@@ -43,6 +47,8 @@ Herring$SHOR <- Herring_LAI[Herring_LAI$component == "Shetland_Orkney",]
 Herring$Buchan <- Herring_LAI[Herring_LAI$component == "Buchan",]
 Herring$Banks <- Herring_LAI[Herring_LAI$component == "Banks",]
 Herring$Downs <- Herring_LAI[Herring_LAI$component == "Downs",]
+
+Herring_LAI <- NULL
 ```
 
 # Change-points
@@ -493,62 +499,102 @@ ggsave(filename = file.path("plots/", "SRR_components.png"),
 
 # tGAM
 
+## SHOR
+
 ```{r}
-### Load env data
+## Load env and cpr data
 load("data/env_df_subset.Rdata")
+load("data/cpr_component.Rdata")
 
-### Shetland Orkney
-#### Merge env data to fish
-tGAM <- list()
-tGAM$SHOR <- merge(Herring$SHOR, env_df_subset[env_df_subset$Region == "Shetland_Orkney",],by = "year") %>%
-  dplyr::select(year, SSB_lag, R, Mean_SST, Mean_SBT, Mean_SSS)
+cpr_SHOR <- list(
+  phyto = cpr_component$phyto %>% filter(region == "Shetland_Orkney"),
+  small = cpr_component$small %>% filter(region == "Shetland_Orkney"))
 
-#### Run threshold gam function from "functions" with each variable
-run_threshold_gam(tGAM$SHOR, "R", "SSB_lag", "Mean_SST", "year") # FALSE, 9.692011
-run_threshold_gam(tGAM$SHOR, "R", "SSB_lag", "Mean_SBT", "year") # FALSE, 7.97895
-run_threshold_gam(tGAM$SHOR, "R", "SSB_lag", "Mean_SSS", "year") # FALSE, 35.08155
+env_SHOR <- env_df_subset %>% filter(Region == "Shetland_Orkney")
 
-#### No significant threshold effect found
+tGAM_data <- list()
 
-#---------------------------------------------------------------------
+## Autumn based analysis
+### Merge env data to fish
+tGAM_data$autumn <- Herring$SHOR %>%
+  left_join(cpr_SHOR$phyto %>% filter(Season == "Autumn"), 
+            by = c("year" = "Year")) %>%
+  left_join(cpr_SHOR$small %>% filter(Season == "Autumn"), 
+            by = c("year" = "Year"), suffix = c("_phyto", "_small")) %>%
+  left_join(env_SHOR %>% filter(Season == "Autumn"), 
+            by = c("year")) %>%
+  dplyr::select(year, SSB_lag, Recruitment, Mean_SST, Mean_SBT, Mean_SSS, 
+                phytoplankton = average_food_phyto, small_zooplankton = average_food_small)
 
-### Buchan
-#### Merge env data to fish
-tGAM$Buchan <- merge(Herring$Buchan, env_df_subset[env_df_subset$Region == "Buchan",],by = "year") %>%
-  dplyr::select(year, SSB_lag, R, Mean_SST, Mean_SBT, Mean_SSS)
+### Run threshold GAM function from "functions" with each variable
+run_threshold_gam(tGAM_data$autumn, "Recruitment", "SSB_lag", "Mean_SST", "year")
+#### Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 11.5437 
+run_threshold_gam(tGAM_data$autumn, "Recruitment", "SSB_lag", "Mean_SBT", "year")
+#### Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 9.514 
+run_threshold_gam(tGAM_data$autumn, "Recruitment", "SSB_lag", "Mean_SSS", "year")
+#### Time range: 1993 - 2023    LOOCV result: TRUE    Model MR: 35.0796 
+run_threshold_gam(tGAM_data$autumn, "Recruitment", "SSB_lag", "phytoplankton", "year") 
+#### Time range: 1973 - 2021    LOOCV result: TRUE    Model MR: 25984.45 
+run_threshold_gam(tGAM_data$autumn, "Recruitment", "SSB_lag", "small_zooplankton", "year")
+#### Time range: 1973 - 2021    LOOCV result: FALSE   Model MR: 1359.696 
 
-#### Run threshold gam function from "functions" with each variable
-run_threshold_gam(tGAM$Buchan, "R", "SSB_lag", "Mean_SST", "year") # FALSE, 10.13097
-run_threshold_gam(tGAM$Buchan, "R", "SSB_lag", "Mean_SBT", "year") # FALSE, 8.279129
-run_threshold_gam(tGAM$Buchan, "R", "SSB_lag", "Mean_SSS", "year") # FALSE, 34.77891
+#### Significant threshold found for SSS, phytoplankton
 
-#### No significant threshold effect found
+##  Lagged autumn based analysis
+### Merge env data to fish
+tGAM_data$lagged <- Herring$SHOR %>%
+  left_join(cpr_SHOR$phyto %>% filter(Season == "Autumn") %>% mutate(Year = Year + 1), 
+            by = c("year" = "Year")) %>%
+  left_join(cpr_SHOR$small %>% filter(Season == "Autumn") %>% mutate(Year = Year + 1), 
+            by = c("year" = "Year"), suffix = c("_phyto", "_small")) %>%
+  left_join(env_SHOR %>% filter(Season == "Autumn") %>% mutate(year = year + 1), 
+            by = c("year")) %>%
+  dplyr::select(year, SSB_lag, Recruitment, Mean_SST, Mean_SBT, Mean_SSS, 
+                phytoplankton = average_food_phyto, small_zooplankton = average_food_small)
 
-#---------------------------------------------------------------------
+### Run threshold GAM function from "functions" with each variable
+run_threshold_gam(tGAM_data$lagged, "Recruitment", "SSB_lag", "Mean_SST", "year")
+#### Time range: 1994 - 2024    LOOCV result: FALSE   Model MR: 11.2821  
+run_threshold_gam(tGAM_data$lagged, "Recruitment", "SSB_lag", "Mean_SBT", "year")
+#### Time range: 1994 - 2024    LOOCV result: FALSE   Model MR: 9.5288  
+run_threshold_gam(tGAM_data$lagged, "Recruitment", "SSB_lag", "Mean_SSS", "year")
+#### Time range: 1994 - 2024    LOOCV result: FALSE   Model MR: 35.0837  
+run_threshold_gam(tGAM_data$lagged, "Recruitment", "SSB_lag", "phytoplankton", "year") 
+#### Time range: 1973 - 2022    LOOCV result: TRUE    Model MR: 26598.41   
+run_threshold_gam(tGAM_data$lagged, "Recruitment", "SSB_lag", "small_zooplankton", "year")
+#### Time range: 1973 - 2022    LOOCV result: FALSE   Model MR: 1342.1  
 
-### Banks
-#### Merge env data to fish
-tGAM$Banks <- merge(Herring$Banks, env_df_subset[env_df_subset$Region == "Banks",],by = "year") %>%
-  dplyr::select(year, SSB_lag, R, Mean_SST, Mean_SBT, Mean_SSS)
+#### Significant threshold found for phytoplankton
 
-#### Run threshold gam function from "functions" with each variable
-run_threshold_gam(tGAM$Banks, "R", "SSB_lag", "Mean_SST", "year") # FALSE, 10.24622
-run_threshold_gam(tGAM$Banks, "R", "SSB_lag", "Mean_SBT", "year") # FALSE, 9.523274
-run_threshold_gam(tGAM$Banks, "R", "SSB_lag", "Mean_SSS", "year") # FALSE, 34.43212
+##  Year based analysis
+### Merge env data to fish
+tGAM_data$year <- Herring$SHOR %>%
+  left_join(cpr_SHOR$phyto %>% 
+            group_by(Year) %>% 
+            summarise(phytoplankton = mean(average_food, na.rm = TRUE), .groups = 'drop'), 
+            by = c("year" = "Year")) %>%
+  left_join(cpr_SHOR$small %>% 
+            group_by(Year) %>% 
+            summarise(small_zooplankton = mean(average_food, na.rm = TRUE), .groups = 'drop'), 
+            by = c("year" = "Year")) %>%
+  left_join(env_SHOR %>%
+            group_by(year) %>%
+            summarise(across(starts_with("Mean_"), mean, na.rm = TRUE), .groups = 'drop'),
+            by = "year") %>%
+  dplyr::select(year, SSB_lag, Recruitment, Mean_SST, Mean_SBT, Mean_SSS, 
+                phytoplankton, small_zooplankton)
 
-#### No significant threshold effect found
+### Run threshold GAM function from "functions" with each variable
+run_threshold_gam(tGAM_data$year, "Recruitment", "SSB_lag", "Mean_SST", "year")
+#### Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 9.692   
+run_threshold_gam(tGAM_data$year, "Recruitment", "SSB_lag", "Mean_SBT", "year")
+#### Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 7.979   
+run_threshold_gam(tGAM_data$year, "Recruitment", "SSB_lag", "Mean_SSS", "year")
+#### Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 35.0815   
+run_threshold_gam(tGAM_data$year, "Recruitment", "SSB_lag", "phytoplankton", "year") 
+#### Time range: 1973 - 2021    LOOCV result: FALSE   Model MR: 155865.6    
+run_threshold_gam(tGAM_data$year, "Recruitment", "SSB_lag", "small_zooplankton", "year")
+#### Time range: 1973 - 2021    LOOCV result: TRUE    Model MR: 1297.602   
 
-#---------------------------------------------------------------------
-
-### Downs
-#### Merge env data to fish
-tGAM$Downs <- merge(Herring$Downs, env_df_subset[env_df_subset$Region == "Downs",],by = "year") %>%
-  dplyr::select(year, SSB_lag, R, Mean_SST, Mean_SBT, Mean_SSS)
-
-#### Run threshold gam function from "functions" with each variable
-run_threshold_gam(tGAM$Downs, "R", "SSB_lag", "Mean_SST", "year") # FALSE, 12.22224
-run_threshold_gam(tGAM$Downs, "R", "SSB_lag", "Mean_SBT", "year") # FALSE, 12.20646
-run_threshold_gam(tGAM$Downs, "R", "SSB_lag", "Mean_SSS", "year") # FALSE, 34.35818
-
-#### No significant threshold effect found
+#### Significant threshold found for small zooplankton
 ```

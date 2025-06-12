@@ -59,6 +59,359 @@ load_environmental_data <- function(sst_file, sbt_file, sss_file) {
 
 
 #--------------------------------------------------------------------------------------
+## Process env data
+#--------------------------------------------------------------------------------------
+
+# Optimized function to process environmental data with seasonal aggregation and optional spatial aggregation
+process_env_data_seasonal <- function(env_data, 
+                                      variables = c("SST", "SBT", "SSS"),
+                                      shapefile_path = NULL,
+                                      polygon_id_column = "NAME",
+                                      remove_na = TRUE) {
+  
+  # Helper function to assign seasons based on month
+  assign_season <- function(month) {
+    case_when(
+      month %in% c(3, 4, 5) ~ "Spring",
+      month %in% c(6, 7, 8) ~ "Summer", 
+      month %in% c(9, 10, 11) ~ "Autumn",
+      month %in% c(12, 1, 2) ~ "Winter",
+      TRUE ~ NA_character_
+    )
+  }
+  
+  # Get time dimension info
+  years <- env_data$years
+  months <- env_data$months
+  n_time <- length(years)
+  
+  # Handle spatial aggregation if shapefile provided
+  if (!is.null(shapefile_path)) {
+    
+    cat("Processing environmental data with spatial aggregation (efficient subsetting approach)...\n")
+    
+    # Validate spatial coordinates
+    if (!all(c("lon", "lat") %in% names(env_data))) {
+      stop("Environmental data must contain 'lon' and 'lat' arrays for spatial aggregation")
+    }
+    
+    # Load shapefile
+    areas_sf <- st_read(shapefile_path, quiet = TRUE)
+    cat("Loaded", nrow(areas_sf), "polygons\n")
+    
+    # Create spatial points from lon/lat coordinates (once)
+    coords_df <- expand.grid(lon = env_data$lon, lat = env_data$lat)
+    coords_sf <- st_as_sf(coords_df, coords = c("lon", "lat"), crs = st_crs(areas_sf))
+    cat("Created spatial grid:", nrow(coords_df), "points\n")
+    
+    # Initialize results list
+    all_region_results <- list()
+    
+    # Loop through each polygon in the shapefile
+    for (i in 1:nrow(areas_sf)) {
+      area_name <- areas_sf[[polygon_id_column]][i]
+      cat("Processing region:", area_name, "(", i, "of", nrow(areas_sf), ")\n")
+      
+      # Find points that fall within this polygon
+      within_area <- st_within(coords_sf, areas_sf[i, ], sparse = FALSE)[, 1]
+      within_indices <- which(within_area)
+      
+      if (length(within_indices) == 0) {
+        warning(paste("No data points found within area:", area_name))
+        next
+      }
+      
+      # Extract lon/lat indices from the grid positions
+      lon_indices <- ((within_indices - 1) %% length(env_data$lon)) + 1
+      lat_indices <- ((within_indices - 1) %/% length(env_data$lon)) + 1
+      
+      # Get unique indices
+      unique_lon_indices <- sort(unique(lon_indices))
+      unique_lat_indices <- sort(unique(lat_indices))
+      
+      cat("  Spatial subset size:", length(unique_lon_indices), "x", length(unique_lat_indices), "=", 
+          length(unique_lon_indices) * length(unique_lat_indices), "grid cells\n")
+      
+      # Process each variable for this region
+      region_data_list <- list()
+      
+      for (var in variables) {
+        if (!var %in% names(env_data)) {
+          warning(paste("Variable", var, "not found in env_data"))
+          next
+        }
+        
+        # Subset the environmental array for this region
+        subset_var <- env_data[[var]][unique_lon_indices, unique_lat_indices, , drop = FALSE]
+        
+        # Remove NA locations if requested
+        if (remove_na) {
+          # Identify grid cells that have data (not all NA across time)
+          has_data <- array(FALSE, dim = c(length(unique_lon_indices), length(unique_lat_indices)))
+          
+          for (lon_idx in 1:length(unique_lon_indices)) {
+            for (lat_idx in 1:length(unique_lat_indices)) {
+              # Check if this location has any non-NA values across all time steps
+              vals <- subset_var[lon_idx, lat_idx, ]
+              has_data[lon_idx, lat_idx] <- any(!is.na(vals))
+            }
+          }
+          
+          # Find indices of locations with data
+          valid_lon_indices <- which(apply(has_data, 1, any))
+          valid_lat_indices <- which(apply(has_data, 2, any))
+          
+          # Check if any valid data remains
+          if (length(valid_lon_indices) == 0 || length(valid_lat_indices) == 0) {
+            warning(paste("No valid data points (all NAs) found for variable", var, "in area:", area_name))
+            next
+          }
+          
+          # Subset to only valid locations
+          subset_var <- subset_var[valid_lon_indices, valid_lat_indices, , drop = FALSE]
+          n_removed <- (length(unique_lon_indices) * length(unique_lat_indices)) - 
+            (length(valid_lon_indices) * length(valid_lat_indices))
+          if (n_removed > 0) {
+            cat("    Removed", n_removed, "NA-only grid cells for", var, "\n")
+          }
+        }
+        
+        # Convert to long format efficiently
+        dims <- dim(subset_var)
+        
+        if (prod(dims) > 0) {  # Check if we have any data
+          # Create vectors for the data frame
+          values <- as.vector(subset_var)
+          years_rep <- rep(years, each = dims[1] * dims[2])
+          months_rep <- rep(months, each = dims[1] * dims[2])
+          
+          # Remove NA values and corresponding indices
+          valid_mask <- !is.na(values)
+          
+          if (sum(valid_mask) > 0) {
+            var_df <- data.frame(
+              Value = values[valid_mask],
+              year = years_rep[valid_mask],
+              month = months_rep[valid_mask],
+              Variable = var,
+              stringsAsFactors = FALSE
+            )
+            
+            region_data_list[[var]] <- var_df
+          }
+        }
+      }
+      
+      # Combine all variables for this region
+      if (length(region_data_list) > 0) {
+        region_data <- bind_rows(region_data_list)
+        
+        # Add region identifier and season
+        region_data$Region <- area_name
+        region_data$Season <- assign_season(region_data$month)
+        
+        # Remove rows with missing season
+        region_data <- region_data[!is.na(region_data$Season), ]
+        
+        if (nrow(region_data) > 0) {
+          all_region_results[[area_name]] <- region_data
+          cat("  Processed", nrow(region_data), "valid data points\n")
+        }
+      }
+    }
+    
+    # Combine all regions
+    if (length(all_region_results) > 0) {
+      cat("\nCombining results from", length(all_region_results), "regions...\n")
+      all_data <- bind_rows(all_region_results)
+      
+      # Aggregate by region, year, season, and variable
+      result <- all_data %>%
+        group_by(Region, year, Season, Variable) %>%
+        summarise(Mean_Value = mean(Value, na.rm = TRUE), .groups = 'drop') %>%
+        # Remove incomplete last year if needed
+        filter(year != max(year)) %>%
+        # Pivot to wide format
+        pivot_wider(names_from = Variable, values_from = Mean_Value, names_prefix = "Mean_") %>%
+        arrange(Region, year, Season)
+      
+    } else {
+      stop("No valid data found in any regions")
+    }
+    
+    cat("Spatial aggregation complete.\n")
+    cat("Regions found:", length(unique(result$Region)), "\n")
+    
+  } else {
+    
+    cat("Processing environmental data without spatial aggregation...\n")
+    
+    # Process each variable (non-spatial case) - optimized approach
+    env_df_seasonal <- variables %>%
+      map_dfr(~ {
+        # Extract the 3D array for this variable
+        var_data <- env_data[[.x]]
+        
+        if (is.null(var_data)) {
+          warning(paste("Variable", .x, "not found in env_data"))
+          return(NULL)
+        }
+        
+        # Get dimensions [lon, lat, time]
+        dims <- dim(var_data)
+        
+        # Create expanded data frame using the actual years and months from the data
+        data.frame(
+          Value = as.vector(var_data),
+          year = rep(years, each = dims[1] * dims[2]),
+          month = rep(months, each = dims[1] * dims[2]),
+          Variable = .x
+        ) %>%
+          # Add season
+          mutate(Season = assign_season(month)) %>%
+          # Remove rows with missing data
+          filter(!is.na(Value), !is.na(Season))
+      })
+    
+    # Aggregate directly to seasonal data (no spatial separation)
+    result <- env_df_seasonal %>%
+      group_by(year, Season, Variable) %>%
+      summarise(Mean_Value = mean(Value, na.rm = TRUE), .groups = 'drop') %>%
+      # Remove incomplete last year if needed
+      filter(year != max(year)) %>%
+      # Pivot to wide format
+      pivot_wider(names_from = Variable, values_from = Mean_Value, names_prefix = "Mean_") %>%
+      arrange(year, Season)
+    
+    cat("Temporal aggregation complete.\n")
+  }
+  
+  # Add summary information
+  cat("\n=== ENVIRONMENTAL DATA PROCESSING SUMMARY ===\n")
+  cat("Variables processed:", paste(variables, collapse = ", "), "\n")
+  cat("Output records:", nrow(result), "\n")
+  cat("Year range:", min(result$year), "-", max(result$year), "\n")
+  cat("Seasons:", paste(unique(result$Season), collapse = ", "), "\n")
+  
+  if ("Region" %in% names(result)) {
+    cat("Spatial regions:", length(unique(result$Region)), "\n")
+  }
+  
+  return(result)
+}
+
+# Helper function for the efficient spatial subsetting (standalone version)
+subset_environmental_data_shapefile <- function(combined_data, 
+                                                shapefile_path, 
+                                                area_column = "name", 
+                                                remove_na = TRUE) {
+  
+  ### Load shapefile
+  areas_sf <- st_read(shapefile_path)
+  
+  ### Create spatial points from lon/lat coordinates
+  coords_df <- expand.grid(lon = combined_data$lon, lat = combined_data$lat)
+  coords_sf <- st_as_sf(coords_df, coords = c("lon", "lat"), crs = st_crs(areas_sf))
+  
+  ### Initialize list
+  environmental_subsets_by_area <- list()
+  
+  ### Loop through each polygon in the shapefile
+  for (i in 1:nrow(areas_sf)) {
+    area_name <- areas_sf[[area_column]][i]
+    
+    ### Find points that fall within this polygon
+    within_area <- st_within(coords_sf, areas_sf[i, ], sparse = FALSE)[, 1]
+    
+    ### Convert logical vector back to lon/lat indices
+    within_indices <- which(within_area)
+    
+    if (length(within_indices) == 0) {
+      warning(paste("No data points found within area:", area_name))
+      next
+    }
+    
+    ### Extract lon/lat indices from the grid positions
+    lon_indices <- ((within_indices - 1) %% length(combined_data$lon)) + 1
+    lat_indices <- ((within_indices - 1) %/% length(combined_data$lon)) + 1
+    
+    ### Get unique indices
+    unique_lon_indices <- sort(unique(lon_indices))
+    unique_lat_indices <- sort(unique(lat_indices))
+    
+    ### Initial subset of the environmental arrays
+    subset_SST <- combined_data$SST[unique_lon_indices, unique_lat_indices, , drop = FALSE]
+    subset_SBT <- combined_data$SBT[unique_lon_indices, unique_lat_indices, , drop = FALSE]
+    subset_SSS <- combined_data$SSS[unique_lon_indices, unique_lat_indices, , drop = FALSE]
+    subset_lon <- combined_data$lon[unique_lon_indices]
+    subset_lat <- combined_data$lat[unique_lat_indices]
+    
+    ### Remove NA locations if requested
+    if (remove_na) {
+      ### Identify grid cells that have data (not all NA across time)
+      has_data <- array(FALSE, dim = c(length(unique_lon_indices), length(unique_lat_indices)))
+      
+      for (lon_idx in 1:length(unique_lon_indices)) {
+        for (lat_idx in 1:length(unique_lat_indices)) {
+          ### Check if this location has any non-NA values across all time steps
+          sst_vals <- subset_SST[lon_idx, lat_idx, ]
+          sbt_vals <- subset_SBT[lon_idx, lat_idx, ]
+          sss_vals <- subset_SSS[lon_idx, lat_idx, ]
+          
+          ### Location has data if any variable has at least one non-NA value
+          has_data[lon_idx, lat_idx] <- any(!is.na(sst_vals)) | 
+            any(!is.na(sbt_vals)) | 
+            any(!is.na(sss_vals))
+        }
+      }
+      
+      ### Find indices of locations with data
+      valid_lon_indices <- which(apply(has_data, 1, any))
+      valid_lat_indices <- which(apply(has_data, 2, any))
+      
+      ### Check if any valid data remains
+      if (length(valid_lon_indices) == 0 || length(valid_lat_indices) == 0) {
+        warning(paste("No valid data points (all NAs) found within area:", area_name))
+        next
+      }
+      
+      ### Subset to only valid locations
+      subset_SST <- subset_SST[valid_lon_indices, valid_lat_indices, , drop = FALSE]
+      subset_SBT <- subset_SBT[valid_lon_indices, valid_lat_indices, , drop = FALSE]
+      subset_SSS <- subset_SSS[valid_lon_indices, valid_lat_indices, , drop = FALSE]
+      subset_lon <- subset_lon[valid_lon_indices]
+      subset_lat <- subset_lat[valid_lat_indices]
+      
+      ### Report how many locations were removed
+      n_removed <- (length(unique_lon_indices) * length(unique_lat_indices)) - 
+        (length(valid_lon_indices) * length(valid_lat_indices))
+      if (n_removed > 0) {
+        message(paste("Removed", n_removed, "NA-only grid cells from area:", area_name))
+      }
+    }
+    
+    ### Create final subset list
+    subset_env_list <- list(
+      SST = subset_SST,
+      SBT = subset_SBT,
+      SSS = subset_SSS,
+      lon = subset_lon,
+      lat = subset_lat,
+      years = combined_data$years,
+      months = combined_data$months,
+      dates = combined_data$dates,
+      area_polygon = areas_sf[i, ]  # Store the polygon for reference
+    )
+    
+    ### Store data in the 'environmental_subsets_by_area' list
+    environmental_subsets_by_area[[area_name]] <- subset_env_list
+  }
+  
+  return(environmental_subsets_by_area)
+}
+
+
+#--------------------------------------------------------------------------------------
 ## Process CPR data
 #--------------------------------------------------------------------------------------
 
@@ -162,10 +515,6 @@ process_food_availability <- function(cpr_data,
 #--------------------------------------------------------------------------------------
 ## CPR testing
 #--------------------------------------------------------------------------------------
-
-# ==========================================
-# SIMPLIFIED DATA QUALITY TESTING
-# ==========================================
 
 test_data_quality <- function(food_data) {
   
@@ -313,130 +662,118 @@ assess_column <- function(food_data, test_column) {
 
 
 #--------------------------------------------------------------------------------------
-## Subset environmental data by components with shapefile
-#--------------------------------------------------------------------------------------
-
-subset_environmental_data_shapefile <- function(combined_data, shapefile_path, area_column = "name", remove_na = TRUE) {
-  
-  ### Load shapefile
-  areas_sf <- st_read(shapefile_path)
-  
-  ### Create spatial points from lon/lat coordinates
-  coords_df <- expand.grid(lon = combined_data$lon, lat = combined_data$lat)
-  coords_sf <- st_as_sf(coords_df, coords = c("lon", "lat"), crs = st_crs(areas_sf))
-  
-  ### Initialise list
-  environmental_subsets_by_area <- list()
-  
-  ### Loop through each polygon in the shapefile
-  for (i in 1:nrow(areas_sf)) {
-    area_name <- areas_sf[[area_column]][i]
-    
-    ### Find points that fall within this polygon
-    within_area <- st_within(coords_sf, areas_sf[i, ], sparse = FALSE)[, 1]
-    
-    ### Convert logical vector back to lon/lat indices
-    within_indices <- which(within_area)
-    
-    if (length(within_indices) == 0) {
-      warning(paste("No data points found within area:", area_name))
-      next}
-    
-    ### Extract lon/lat indices from the grid positions
-    lon_indices <- ((within_indices - 1) %% length(combined_data$lon)) + 1
-    lat_indices <- ((within_indices - 1) %/% length(combined_data$lon)) + 1
-    
-    ### Get unique indices
-    unique_lon_indices <- sort(unique(lon_indices))
-    unique_lat_indices <- sort(unique(lat_indices))
-    
-    ### Initial subset of the environmental arrays
-    subset_SST <- combined_data$SST[unique_lon_indices, unique_lat_indices, , drop = FALSE]
-    subset_SBT <- combined_data$SBT[unique_lon_indices, unique_lat_indices, , drop = FALSE]
-    subset_SSS <- combined_data$SSS[unique_lon_indices, unique_lat_indices, , drop = FALSE]
-    subset_lon <- combined_data$lon[unique_lon_indices]
-    subset_lat <- combined_data$lat[unique_lat_indices]
-    
-    ### Remove NA locations if requested
-    if (remove_na) {
-      ### Identify grid cells that have data (not all NA across time)
-      ### Check if any time slice has non-NA values for any variable
-      has_data <- array(FALSE, dim = c(length(unique_lon_indices), length(unique_lat_indices)))
-      
-      for (lon_idx in 1:length(unique_lon_indices)) {
-        for (lat_idx in 1:length(unique_lat_indices)) {
-          ### Check if this location has any non-NA values across all time steps
-          sst_vals <- subset_SST[lon_idx, lat_idx, ]
-          sbt_vals <- subset_SBT[lon_idx, lat_idx, ]
-          sss_vals <- subset_SSS[lon_idx, lat_idx, ]
-          
-          ### Location has data if any variable has at least one non-NA value
-          has_data[lon_idx, lat_idx] <- any(!is.na(sst_vals)) | 
-            any(!is.na(sbt_vals)) | 
-            any(!is.na(sss_vals))}}
-      
-      ### Find indices of locations with data
-      valid_lon_indices <- which(apply(has_data, 1, any))
-      valid_lat_indices <- which(apply(has_data, 2, any))
-      
-      ### Check if any valid data remains
-      if (length(valid_lon_indices) == 0 || length(valid_lat_indices) == 0) {
-        warning(paste("No valid data points (all NAs) found within area:", area_name))
-        next}
-      
-      ### Subset to only valid locations
-      subset_SST <- subset_SST[valid_lon_indices, valid_lat_indices, , drop = FALSE]
-      subset_SBT <- subset_SBT[valid_lon_indices, valid_lat_indices, , drop = FALSE]
-      subset_SSS <- subset_SSS[valid_lon_indices, valid_lat_indices, , drop = FALSE]
-      subset_lon <- subset_lon[valid_lon_indices]
-      subset_lat <- subset_lat[valid_lat_indices]
-      
-      ### Report how many locations were removed
-      n_removed <- (length(unique_lon_indices) * length(unique_lat_indices)) - 
-        (length(valid_lon_indices) * length(valid_lat_indices))
-      if (n_removed > 0) {
-        message(paste("Removed", n_removed, "NA-only grid cells from area:", area_name))}}
-    
-    ### Create final subset list
-    subset_env_list <- list(
-      SST = subset_SST,
-      SBT = subset_SBT,
-      SSS = subset_SSS,
-      lon = subset_lon,
-      lat = subset_lat,
-      years = combined_data$years,
-      months = combined_data$months,
-      dates = combined_data$dates,
-      area_polygon = areas_sf[i, ])  # Store the polygon for reference
-    
-    ### Store data in the 'environmental_subsets_by_area' list
-    environmental_subsets_by_area[[area_name]] <- subset_env_list}
-  
-  return(environmental_subsets_by_area)}
-
-
-#--------------------------------------------------------------------------------------
 ## Plot environmental data
 #--------------------------------------------------------------------------------------
 
-plot_env_data <- function(env_df_full, env_df_subset, 
-                          effort_data = NULL, copepod_data = NULL) {
+plot_env_data_dual <- function(env_df_full_seasonal, env_df_subset_seasonal, 
+                               cpr_full_data = NULL, cpr_component_data = NULL) {
   
   # Setup
-  areas <- if(is.factor(env_df_subset$Region)) levels(env_df_subset$Region) else unique(env_df_subset$Region)
+  areas <- if(is.factor(env_df_subset_seasonal$Region)) levels(env_df_subset_seasonal$Region) else unique(env_df_subset_seasonal$Region)
   column_names <- c("Full Stock", areas)
   colors <- setNames(c("#2E86AB", "#A23B72", "#F18F01", "#C73E1D", "#6A994E"), column_names)
   
-  # Simple placeholder data generation
-  generate_placeholder <- function(n_rows) rep(1, n_rows)
-  
-  # Create time series plot
-  create_ts_plot <- function(data, y_var, y_label, column_name = NULL, 
-                             is_bottom = FALSE, is_first_col = FALSE, color = "black") {
+  # Function to aggregate CPR data for both yearly and autumn data
+  aggregate_cpr_data <- function(cpr_data, region_name = NULL, season_filter = "All") {
+    if (is.null(cpr_data)) return(NULL)
     
-    p <- ggplot(data, aes(x = year, y = !!sym(y_var))) +
-      geom_line(color = color, size = 0.6) +
-      geom_point(color = "grey20", size = 1) +
+    # Filter by season if specified
+    if (season_filter != "All") {
+      cpr_data <- cpr_data %>% filter(Season == season_filter)
+    }
+    
+    if (is.null(region_name)) {
+      # For full stock data
+      if (season_filter == "All") {
+        # Yearly averages across all seasons
+        result <- cpr_data %>%
+          group_by(Year) %>%
+          summarise(average_food = mean(average_food, na.rm = TRUE), .groups = 'drop') %>%
+          rename(year = Year)
+      } else {
+        # Seasonal data (already filtered above)
+        result <- cpr_data %>%
+          rename(year = Year) %>%
+          dplyr::select(year, average_food)
+      }
+    } else {
+      # For regional data
+      if (season_filter == "All") {
+        # Yearly averages across all seasons
+        result <- cpr_data %>%
+          filter(region == region_name) %>%
+          group_by(Year) %>%
+          summarise(average_food = mean(average_food, na.rm = TRUE), .groups = 'drop') %>%
+          rename(year = Year)
+      } else {
+        # Seasonal data (already filtered above)
+        result <- cpr_data %>%
+          filter(region == region_name) %>%
+          rename(year = Year) %>%
+          dplyr::select(year, average_food)
+      }
+    }
+    
+    return(result)
+  }
+  
+  # Function to get CPR data for a specific region/column
+  get_cpr_data <- function(cpr_data, region_name, data_years, season_filter = "All") {
+    if (is.null(cpr_data)) return(rep(1, length(data_years)))
+    
+    agg_data <- aggregate_cpr_data(cpr_data, region_name, season_filter)
+    
+    if (is.null(agg_data) || nrow(agg_data) == 0) {
+      return(rep(1, length(data_years)))
+    }
+    
+    # Match years and fill missing with interpolation only within data range
+    matched_data <- data.frame(year = data_years) %>%
+      left_join(agg_data, by = "year")
+    
+    # Only interpolate within the range of available data, leave gaps at ends
+    if (any(is.na(matched_data$average_food)) && sum(!is.na(matched_data$average_food)) > 1) {
+      data_range <- range(matched_data$year[!is.na(matched_data$average_food)])
+      within_range <- matched_data$year >= data_range[1] & matched_data$year <= data_range[2]
+      
+      # Only interpolate for years within the data range
+      interpolated_vals <- approx(x = matched_data$year[!is.na(matched_data$average_food)], 
+                                  y = matched_data$average_food[!is.na(matched_data$average_food)], 
+                                  xout = matched_data$year[within_range], 
+                                  rule = 1)$y
+      
+      matched_data$average_food[within_range] <- interpolated_vals
+    }
+    
+    return(matched_data$average_food)
+  }
+  
+  # Helper function to create desaturated colors
+  desaturate_color <- function(color, amount = 0.5) {
+    # Convert to HSV and reduce saturation
+    hsv_color <- rgb2hsv(col2rgb(color))
+    hsv_color[2] <- hsv_color[2] * amount  # Reduce saturation
+    return(hsv(hsv_color[1], hsv_color[2], hsv_color[3]))
+  }
+  
+  # Create time series plot with dual layers (yearly + autumn)
+  create_ts_plot_dual <- function(data_yearly, data_autumn, y_var_yearly, y_var_autumn, y_label, 
+                                  column_name = NULL, is_bottom = FALSE, is_first_col = FALSE, color = "black") {
+    
+    # Create desaturated color for yearly data
+    color_yearly <- desaturate_color(color, 0.4)
+    
+    p <- ggplot() +
+      # Yearly data (background layer with desaturated color and dashed line)
+      geom_line(data = data_yearly, aes(x = year, y = !!sym(y_var_yearly)), 
+                color = color_yearly, size = 0.5, linetype = "dashed", alpha = 0.7) +
+      geom_point(data = data_yearly, aes(x = year, y = !!sym(y_var_yearly)), 
+                 color = color_yearly, size = 0.7, alpha = 0.7) +
+      # Autumn data (foreground layer with full color and solid line)
+      geom_line(data = data_autumn, aes(x = year, y = !!sym(y_var_autumn)), 
+                color = color, size = 0.8, alpha = 1.0) +
+      geom_point(data = data_autumn, aes(x = year, y = !!sym(y_var_autumn)), 
+                 color = color, size = 0.7, alpha = 1.0) +
       theme_minimal() +
       theme(
         panel.grid.minor = element_blank(),
@@ -456,204 +793,81 @@ plot_env_data <- function(env_df_full, env_df_subset,
     # Add column header
     if (!is.null(column_name)) {
       p <- p + annotate("text", x = Inf, y = Inf, label = column_name, 
-                        hjust = 1.1, vjust = 1.5, size = 3, fontface = "bold")}
+                        hjust = 1.1, vjust = 1.5, size = 3, fontface = "bold")
+    }
     
-    return(p)}
+    return(p)
+  }
   
   # Create plots for each column
-  create_column_plots <- function(data_env, column_name, is_first_col = FALSE) {
+  create_column_plots <- function(data_env_seasonal, column_name, is_first_col = FALSE) {
     color <- colors[[column_name]]
-    n_rows <- nrow(data_env)
     
-    # Get or generate effort data
-    effort_vals <- if (!is.null(effort_data) && column_name %in% names(effort_data)) {
-      effort_data[[column_name]]
-    } else {
-      generate_placeholder(n_rows)}
+    # Create yearly averages from seasonal data
+    data_env_yearly <- data_env_seasonal %>%
+      group_by(year) %>%
+      summarise(across(starts_with("Mean_"), mean, na.rm = TRUE), .groups = 'drop')
     
-    # Get or generate copepod data
-    copepod_vals <- if (!is.null(copepod_data) && column_name %in% names(copepod_data)) {
-      copepod_data[[column_name]]
+    # Filter autumn data
+    data_env_autumn <- data_env_seasonal %>%
+      filter(Season == "Autumn")
+    
+    data_years <- data_env_yearly$year
+    
+    # Get phytoplankton and zooplankton data for both yearly and autumn
+    if (column_name == "Full Stock") {
+      phyto_vals_yearly <- get_cpr_data(cpr_full_data$phyto, NULL, data_years, "All")
+      phyto_vals_autumn <- get_cpr_data(cpr_full_data$phyto, NULL, data_env_autumn$year, "Autumn")
+      small_vals_yearly <- get_cpr_data(cpr_full_data$small, NULL, data_years, "All")
+      small_vals_autumn <- get_cpr_data(cpr_full_data$small, NULL, data_env_autumn$year, "Autumn")
     } else {
-      generate_placeholder(n_rows)}
+      phyto_vals_yearly <- get_cpr_data(cpr_component_data$phyto, column_name, data_years, "All")
+      phyto_vals_autumn <- get_cpr_data(cpr_component_data$phyto, column_name, data_env_autumn$year, "Autumn")
+      small_vals_yearly <- get_cpr_data(cpr_component_data$small, column_name, data_years, "All")
+      small_vals_autumn <- get_cpr_data(cpr_component_data$small, column_name, data_env_autumn$year, "Autumn")
+    }
     
     # Create data frames
-    effort_df <- data.frame(year = data_env$year, effort = effort_vals)
-    copepod_df <- data.frame(year = data_env$year, copepod = copepod_vals)
+    phyto_df_yearly <- data.frame(year = data_years, phytoplankton = phyto_vals_yearly)
+    phyto_df_autumn <- data.frame(year = data_env_autumn$year, phytoplankton = phyto_vals_autumn)
+    small_df_yearly <- data.frame(year = data_years, small_zooplankton = small_vals_yearly)
+    small_df_autumn <- data.frame(year = data_env_autumn$year, small_zooplankton = small_vals_autumn)
     
     # Variable mappings for environmental data
-    env_vars <- if (column_name == "Full Stock") {
-      list(sst = "mean_SST", sbt = "mean_SBT", sss = "mean_SSS")
-    } else {
-      list(sst = "Mean_SST", sbt = "Mean_SBT", sss = "Mean_SSS")}
+    env_vars <- list(sst = "Mean_SST", sbt = "Mean_SBT", sss = "Mean_SSS")
     
-    # Create all plots
+    # Create all plots with dual layers
     plots <- list(
-      create_ts_plot(effort_df, "effort", "Effort (thousands hours)", 
-                     if(is_first_col) column_name else column_name, FALSE, is_first_col, color),
-      create_ts_plot(copepod_df, "copepod", expression("Big Copepod (ind m"^"-3"*")"), 
-                     NULL, FALSE, is_first_col, color),
-      create_ts_plot(data_env, env_vars$sst, "SST (°C)", 
-                     NULL, FALSE, is_first_col, color),
-      create_ts_plot(data_env, env_vars$sbt, "SBT (°C)", 
-                     NULL, FALSE, is_first_col, color),
-      create_ts_plot(data_env, env_vars$sss, "SSS (PSU)", 
-                     NULL, TRUE, is_first_col, color))
+      create_ts_plot_dual(phyto_df_yearly, phyto_df_autumn, "phytoplankton", "phytoplankton", 
+                          "Phytoplankton (ind/sample)", 
+                          if(is_first_col) column_name else column_name, FALSE, is_first_col, color),
+      create_ts_plot_dual(small_df_yearly, small_df_autumn, "small_zooplankton", "small_zooplankton", 
+                          "Small Zooplankton (ind/sample)", 
+                          NULL, FALSE, is_first_col, color),
+      create_ts_plot_dual(data_env_yearly, data_env_autumn, env_vars$sst, env_vars$sst, 
+                          "SST (°C)", 
+                          NULL, FALSE, is_first_col, color),
+      create_ts_plot_dual(data_env_yearly, data_env_autumn, env_vars$sbt, env_vars$sbt, 
+                          "SBT (°C)", 
+                          NULL, FALSE, is_first_col, color),
+      create_ts_plot_dual(data_env_yearly, data_env_autumn, env_vars$sss, env_vars$sss, 
+                          "SSS (PSU)", 
+                          NULL, TRUE, is_first_col, color)
+    )
     
-    return(wrap_plots(plots, ncol = 1))}
+    return(wrap_plots(plots, ncol = 1))
+  }
   
   # Generate all columns
-  plot_list <- list(create_column_plots(env_df_full, "Full Stock", TRUE))
+  plot_list <- list(create_column_plots(env_df_full_seasonal, "Full Stock", TRUE))
   
   for (area in areas) {
-    area_data <- env_df_subset %>% filter(Region == area) %>% arrange(year)
-    plot_list <- append(plot_list, list(create_column_plots(area_data, area, FALSE)))}
+    area_data <- env_df_subset_seasonal %>% filter(Region == area) %>% arrange(year, Season)
+    plot_list <- append(plot_list, list(create_column_plots(area_data, area, FALSE)))
+  }
   
   # Combine into final plot
-  return(wrap_plots(plot_list, nrow = 1))}
-
-
-# Functions for "data_analysis.Rmd"
-#--------------------------------------------------------------------------------------
-## Analyse SSB change-points
-#--------------------------------------------------------------------------------------
-
-changepoint_analysis <- function(data, 
-                                 ssb_col = "SSB_component", 
-                                 year_col = "year",
-                                 region_name = "Region",
-                                 Q = 6,
-                                 bcp_threshold = 0.7,
-                                 consensus_tolerance = 1,
-                                 min_years_between = 5,
-                                 plot_results = TRUE) {
-  
-  # Print region being analyzed
-  cat("=== Changepoint Analysis for", region_name, "===\n")
-  
-  # Validate inputs
-  if (!ssb_col %in% names(data)) {
-    stop("SSB column '", ssb_col, "' not found in data")
-  }
-  if (!year_col %in% names(data)) {
-    stop("Year column '", year_col, "' not found in data")
-  }
-  
-  # Remove rows with missing values
-  analysis_data <- data[complete.cases(data[c(ssb_col, year_col)]), ]
-  
-  if(nrow(analysis_data) < nrow(data)) {
-    cat("# Removed", nrow(data) - nrow(analysis_data), "rows with missing values\n")
-  }
-  
-  cat("# Data range:", range(analysis_data[[year_col]])[1], "-", 
-      range(analysis_data[[year_col]])[2], "\n")
-  cat("# Analysis parameters: Q =", Q, ", BCP threshold =", bcp_threshold, "\n")
-  
-  # CPT Analysis (BinSeg method)
-  cat("\n## CPT Analysis (BinSeg)\n")
-  ssbcpts <- cpt.mean(data = analysis_data[[ssb_col]], method = "BinSeg", Q = Q)
-  cpt_indices <- cpts(ssbcpts)
-  cpt_years <- analysis_data[[year_col]][cpt_indices]
-  
-  cat("# CPT changepoint indices:", paste(cpt_indices, collapse = ", "), "\n")
-  cat("# CPT changepoint years:", paste(cpt_years, collapse = ", "), "\n")
-  
-  if(plot_results) {
-    plot(ssbcpts, type = "l", cpt.col = "navyblue", 
-         xlab = "Index", pt.width = 4,
-         main = paste("CPT Analysis -", region_name))
-  }
-  
-  # BCP Analysis
-  cat("\n## BCP Analysis\n")
-  bcp.ssb <- bcp(analysis_data[[ssb_col]])
-  bcp_indices <- which(bcp.ssb$posterior.prob >= bcp_threshold)
-  bcp_years <- analysis_data[[year_col]][bcp_indices]
-  
-  cat("# BCP changepoint indices:", paste(bcp_indices, collapse = ", "), "\n")
-  cat("# BCP changepoint years:", paste(bcp_years, collapse = ", "), "\n")
-  
-  if(plot_results) {
-    plot(bcp.ssb, main = paste("BCP Analysis -", region_name))
-  }
-  
-  # Consensus Analysis
-  cat("\n## Consensus Analysis\n")
-  consensus_years <- c()
-  
-  # Find consensus points (within tolerance)
-  for (cpt_year in cpt_years) {
-    if (any(abs(bcp_years - cpt_year) <= consensus_tolerance)) {
-      consensus_years <- c(consensus_years, cpt_year)
-    }
-  }
-  
-  # Apply minimum spacing rule
-  if (length(consensus_years) > 1) {
-    consensus_years <- sort(consensus_years)
-    filtered_consensus <- consensus_years[1]
-    
-    for (i in 2:length(consensus_years)) {
-      if (consensus_years[i] - tail(filtered_consensus, 1) >= min_years_between) {
-        filtered_consensus <- c(filtered_consensus, consensus_years[i])
-      }
-    }
-    consensus_years <- filtered_consensus
-  }
-  
-  # Identify method-specific changepoints
-  cpt_only_years <- setdiff(cpt_years, consensus_years)
-  bcp_only_years <- setdiff(bcp_years, consensus_years)
-  
-  cat("# Consensus changepoints (±", consensus_tolerance, "yr, min", min_years_between, "yr apart):", 
-      paste(consensus_years, collapse = ", "), "\n")
-  
-  if (length(cpt_only_years) > 0) {
-    cat("# CPT only:", paste(cpt_only_years, collapse = ", "), "\n")
-  }
-  if (length(bcp_only_years) > 0) {
-    cat("# BCP only:", paste(bcp_only_years, collapse = ", "), "\n")
-  }
-  
-  # Create results structure
-  results <- list(
-    region = region_name,
-    parameters = list(
-      Q = Q,
-      bcp_threshold = bcp_threshold,
-      consensus_tolerance = consensus_tolerance,
-      min_years_between = min_years_between
-    ),
-    data_info = list(
-      n_observations = nrow(analysis_data),
-      year_range = range(analysis_data[[year_col]]),
-      ssb_range = range(analysis_data[[ssb_col]], na.rm = TRUE)
-    ),
-    cpt_analysis = list(
-      model = ssbcpts,
-      changepoint_indices = cpt_indices,
-      changepoint_years = cpt_years,
-      n_changepoints = length(cpt_years)
-    ),
-    bcp_analysis = list(
-      model = bcp.ssb,
-      changepoint_indices = bcp_indices,
-      changepoint_years = bcp_years,
-      n_changepoints = length(bcp_years),
-      threshold_used = bcp_threshold
-    ),
-    consensus = list(
-      changepoint_years = consensus_years,
-      cpt_only_years = cpt_only_years,
-      bcp_only_years = bcp_only_years,
-      n_consensus = length(consensus_years),
-      criteria = paste("Both methods ±", consensus_tolerance, "year, min", min_years_between, "years between points")
-    )
-  )
-  
-  cat("\n")
-  return(results)
+  return(wrap_plots(plot_list, nrow = 1))
 }
 
 
@@ -1212,35 +1426,121 @@ plot_SRR <- function(data, break_years, title_stock, used_model,
 ## tGAM Analysis
 #--------------------------------------------------------------------------------------
 
+# Robust threshold GAM function with automatic NA handling
+
 run_threshold_gam <- function(data, 
                               response_var, 
                               pressure_var, 
                               threshold_var, 
                               time_var = "year") {
   
-  # Create variables - use [[ ]] to access columns by variable name
-  y <- data[[response_var]]
-  x <- data[[pressure_var]]
-  x2 <- data[[threshold_var]]
-  time <- data[[time_var]]
+  # Step 1: Find the optimal data range (where all required variables have data)
+  find_complete_data_range <- function(data, vars) {
+    # Check which rows have complete data for all required variables
+    complete_rows <- complete.cases(data[vars])
+    
+    if (sum(complete_rows) == 0) {
+      stop(paste("No complete cases found for variables:", paste(vars, collapse = ", ")))
+    }
+    
+    # Find first and last complete data points
+    first_complete <- which.max(complete_rows)  # First TRUE
+    last_complete <- max(which(complete_rows))  # Last TRUE
+    
+    cat("=== DATA RANGE ANALYSIS ===\n")
+    cat("Total rows in dataset:", nrow(data), "\n")
+    cat("Complete cases for analysis:", sum(complete_rows), "\n")
+    cat("Optimal data range:", data[[time_var]][first_complete], "-", data[[time_var]][last_complete], "\n\n")
+    
+    return(list(
+      start_idx = first_complete,
+      end_idx = last_complete,
+      complete_rows = complete_rows,
+      n_complete = sum(complete_rows)
+    ))
+  }
   
-  mod <- gam(y ~ s(x, k = 3)) 
-  tmod <- thresh_gam(model = mod, ind_vec = y, press_vec = x, t_var = x2, name_t_var = threshold_var,
-                     k = 4, a = 0.2, b = 0.8)                             
+  # Required variables for the analysis
+  required_vars <- c(response_var, pressure_var, threshold_var, time_var)
   
-  # Test interaction
-  print("Leave one out crossvalidation result:")
-  print(loocv_result <- loocv_thresh_gam(model = mod, ind_vec = y, press_vec = x, t_var = x2, name_t_var = threshold_var, k = 4, a = 0.2, b = 0.8, time = time))
+  # Find optimal data range
+  data_range <- find_complete_data_range(data, required_vars)
   
-  print("tmod summary")
-  print(summary(tmod))
-  print("tmod mr")
-  print(tmod$mr)
+  if (data_range$n_complete < 10) {
+    stop("Insufficient data: Need at least 10 complete observations for GAM analysis")
+  }
   
-  tmod$train_na <- rep(FALSE, times = length(y))
+  # Step 2: Subset data to optimal range
+  analysis_data <- data[data_range$start_idx:data_range$end_idx, ]
   
-  print("tmod diagnostic plots")
-  print(plot_diagnostics(tmod)$all_plots)
+  # Double-check: remove any remaining NAs (shouldn't be any, but safety check)
+  complete_analysis <- complete.cases(analysis_data[required_vars])
+  if (!all(complete_analysis)) {
+    warning("Some NAs found in middle of data range - removing these rows")
+    analysis_data <- analysis_data[complete_analysis, ]
+  }
   
-  # Add vector with predicted values to data set
-  return(tgam_pred <- predict(tmod))}
+  # Step 3: Extract variables for analysis
+  y <- analysis_data[[response_var]]
+  x <- analysis_data[[pressure_var]]
+  x2 <- analysis_data[[threshold_var]]
+  time <- analysis_data[[time_var]]
+  
+  # Step 4: Run GAM analysis
+  
+  # Fit base GAM model
+  mod <- gam(y ~ s(x, k = 3))
+  
+  # Fit threshold GAM
+  tmod <- thresh_gam(
+    model = mod, 
+    ind_vec = y, 
+    press_vec = x, 
+    t_var = x2, 
+    name_t_var = threshold_var,
+    k = 4, 
+    a = 0.2, 
+    b = 0.8
+  )
+  
+  # Step 6: Cross-validation
+  loocv_result <- loocv_thresh_gam(
+    model = mod, 
+    ind_vec = y, 
+    press_vec = x, 
+    t_var = x2, 
+    name_t_var = threshold_var, 
+    k = 4, 
+    a = 0.2, 
+    b = 0.8, 
+    time = time
+  )
+  
+  # Step 7: Print key results in readable format
+  cat("=== ANALYSIS RESULTS ===\n")
+  cat("Original data size:", nrow(data), "observations\n")
+  cat("Analysis data size:", length(y), "observations\n")
+  cat("Time range:", min(time), "-", max(time), "\n")
+  cat("LOOCV result:", loocv_result$result, "\n")
+  cat("Model MR:", round(tmod$mr, 4), "\n\n")
+  cat("Analysis complete!\n")
+}
+
+# Helper function to summarize GAM results across multiple analyses
+summarize_gam_results <- function(gam_results_list, dataset_names) {
+  
+  cat("=== GAM ANALYSIS SUMMARY ===\n\n")
+  
+  for (i in seq_along(gam_results_list)) {
+    result <- gam_results_list[[i]]
+    name <- dataset_names[i]
+    
+    cat("Dataset:", name, "\n")
+    cat("  Data used:", result$analysis_data_size, "/", result$original_data_size, 
+        "(", round(100 * result$analysis_data_size / result$original_data_size, 1), "%)\n")
+    cat("  Time range:", result$time_range[1], "-", result$time_range[2], "\n")
+    cat("  Variables:", paste(result$variables_used, collapse = ", "), "\n")
+    cat("  LOOCV RMSE:", round(result$loocv_result$cv_rmse, 3), "\n")
+    cat("  Model deviance explained:", round(result$model$cv_dev_expl * 100, 1), "%\n\n")
+  }
+}

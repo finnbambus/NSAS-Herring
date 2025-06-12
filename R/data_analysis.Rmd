@@ -26,6 +26,11 @@ library(MASS)
 library(hydroGOF)
 library(mgcv)
 library(INDperform)
+library(dplyr)
+library(purrr)
+library(progress)
+library(segmented)
+library(FLCore)
 ```
 
 ## Import data
@@ -136,31 +141,45 @@ ggsave(filename = file.path("plots/", "hysteresis_full.png"),
 ```{r}
 ### Run model comparison from model_comp_functions.R 
 source("R/model_comp_functions.R")
+Herring_full <- Herring_full[-c(1:3, 78:79), ]
 
 models_SRR <- run_srr_analysis(
-    data_for_srr = Herring_full[-(79:78),],
-   recruit_col = "R",
-   ssb_col = "SSB",
-   opt_brks_val = 4)
+  data_for_srr = Herring_full,
+  recruit_col = "Recruitment", 
+  ssb_col = "SSB",
+  max_breaks = 4,
+  use_bic = TRUE)
 
-print(models_SRR$comparison_table)
+models_SRR[["comparison_table"]]
 
-#### strucchange model shows lowest RMSE
+#### Bad overdispertion for GLM's exept nebinom
+#### strucchange model shows lowest RMSE, seg.log best R_squared
 
-# Call function "srr_breakpoint_analysis
-results_SRR <- srr_breakpoint_analysis(Herring_full, "SSB", "R", "year", "Herring Full")
+### Call function "srr_breakpoint_analysis"
+results_SRR <- srr_breakpoint_analysis(Herring_full, "SSB", "Recruitment", "year", "Herring Full", method = "segmented")
 
-# Optimal number of breaks: 2 
-# Best breakpoint SSB values:
-# 264793.8  2391903.7 
-# Best breakpoint years:
-# 1981,     2002 
+# Running segmented model analysis
+# Using mean SSB as initial psi: 1537513 
+# Segmented model breakpoint:
+# SSB breakpoint: 579189.1 ± 118213.4 
+# Approximate year: 1983 
+
+# Call function "cross_valid" for performing loocv for all models
+Herring_full$R_log <- log(Herring_full$Recruitment)
+Herring_full$SSB_lag_log <- log(Herring_full$SSB_lag)
+
+dat <- Herring_full[, c(1, 7:10)]
+names(dat) <- c("Year", "R", "SSB_lag", "R_log", "SSB_lag_log")
+
+rmse_mean_herring <- cross_valid(dataset = dat)
+# linear      beverton    ricker      segmented   seg.log     seg.glm     strucchange
+# 10760358    10439657    11540811    11258361    10458588    10998288    14456985
 ```
 
 ## Plotting
 
 ```{r}
-plot_SRR_full <- plot_SRR(Herring_full, break_years = results_SRR$break_years, "Full Stock", "strucchange")
+plot_SRR_full <- plot_SRR(Herring_full, break_years = results_SRR$breakpoint_year, "Full Stock", "segmented-log")
 plot_SRR_full
 ```
 
@@ -178,17 +197,93 @@ ggsave(filename = file.path("plots/", "SRR_full.png"),
 # tGAM
 
 ```{r}
-# Load env data
+## Load env and cpr data
 load("data/env_df_full.Rdata")
+load("data/cpr_full.Rdata")
 
+tGAM_data <- list()
+
+## Autumn based analysis
 ### Merge env data to fish
-tGAM_data <- merge(Herring_full, env_df_full,by = "year") %>%
-  dplyr::select(year, SSB_lag, R, Mean_SST, Mean_SBT, Mean_SSS)
+tGAM_data$autumn <- Herring_full %>%
+  left_join(cpr_full$phyto %>% filter(Season == "Autumn"), 
+            by = c("year" = "Year")) %>%
+  left_join(cpr_full$small %>% filter(Season == "Autumn"), 
+            by = c("year" = "Year"), suffix = c("_phyto", "_small")) %>%
+  left_join(env_df_full %>% filter(Season == "Autumn"), 
+            by = c("year")) %>%
+  dplyr::select(year, SSB_lag, Recruitment, Mean_SST, Mean_SBT, Mean_SSS, 
+                phytoplankton = average_food_phyto, small_zooplankton = average_food_small)
 
-### Run threshold gam function from "functions" with each variable
-run_threshold_gam(tGAM_data, "R", "SSB_lag", "Mean_SST", "year") # FALSE, 10.87623
-run_threshold_gam(tGAM_data, "R", "SSB_lag", "Mean_SBT", "year") # FALSE, 8.561897
-run_threshold_gam(tGAM_data, "R", "SSB_lag", "Mean_SSS", "year") # FALSE, 34.42214
+### Run threshold GAM function from "functions" with each variable
+run_threshold_gam(tGAM_data$autumn, "Recruitment", "SSB_lag", "Mean_SST", "year")
+#### Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 12.7599
+run_threshold_gam(tGAM_data$autumn, "Recruitment", "SSB_lag", "Mean_SBT", "year")
+#### Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 10.5124
+run_threshold_gam(tGAM_data$autumn, "Recruitment", "SSB_lag", "Mean_SSS", "year")
+#### Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 34.4627
+run_threshold_gam(tGAM_data$autumn, "Recruitment", "SSB_lag", "phytoplankton", "year") 
+#### Time range: 1958 - 2021    LOOCV result: FALSE   Model MR: 124756.6 
+run_threshold_gam(tGAM_data$autumn, "Recruitment", "SSB_lag", "small_zooplankton", "year")
+#### Time range: 1958 - 2021    LOOCV result: TRUE    Model MR: 847.3968
 
-#### No significant threshold effect found
+#### Significant threshold found for small zooplankton
+
+##  Lagged autumn based analysis
+### Merge env data to fish
+tGAM_data$lagged <- Herring_full %>%
+  left_join(cpr_full$phyto %>% filter(Season == "Autumn") %>% mutate(Year = Year + 1), 
+            by = c("year" = "Year")) %>%
+  left_join(cpr_full$small %>% filter(Season == "Autumn") %>% mutate(Year = Year + 1), 
+            by = c("year" = "Year"), suffix = c("_phyto", "_small")) %>%
+  left_join(env_df_full %>% filter(Season == "Autumn") %>% mutate(year = year + 1), 
+            by = c("year")) %>%
+  dplyr::select(year, SSB_lag, Recruitment, Mean_SST, Mean_SBT, Mean_SSS, 
+                phytoplankton = average_food_phyto, small_zooplankton = average_food_small)
+
+### Run threshold GAM function from "functions" with each variable
+run_threshold_gam(tGAM_data$lagged, "Recruitment", "SSB_lag", "Mean_SST", "year")
+#### Time range: 1994 - 2024    LOOCV result: FALSE   Model MR: 12.4188 
+run_threshold_gam(tGAM_data$lagged, "Recruitment", "SSB_lag", "Mean_SBT", "year")
+#### Time range: 1994 - 2024    LOOCV result: FALSE   Model MR: 10.1526 
+run_threshold_gam(tGAM_data$lagged, "Recruitment", "SSB_lag", "Mean_SSS", "year")
+#### Time range: 1994 - 2024    LOOCV result: FALSE   Model MR: 34.4627 
+run_threshold_gam(tGAM_data$lagged, "Recruitment", "SSB_lag", "phytoplankton", "year") 
+#### Time range: 1959 - 2022    LOOCV result: FALSE   Model MR: 101237.4  
+run_threshold_gam(tGAM_data$lagged, "Recruitment", "SSB_lag", "small_zooplankton", "year")
+#### Time range: 1959 - 2022    LOOCV result: FALSE   Model MR: 847.3968 
+
+#### No significant threshold
+
+##  Year based analysis
+### Merge env data to fish
+tGAM_data$year <- Herring_full %>%
+  left_join(cpr_full$phyto %>% 
+            group_by(Year) %>% 
+            summarise(phytoplankton = mean(average_food, na.rm = TRUE), .groups = 'drop'), 
+            by = c("year" = "Year")) %>%
+  left_join(cpr_full$small %>% 
+            group_by(Year) %>% 
+            summarise(small_zooplankton = mean(average_food, na.rm = TRUE), .groups = 'drop'), 
+            by = c("year" = "Year")) %>%
+  left_join(env_df_full %>%
+            group_by(year) %>%
+            summarise(across(starts_with("Mean_"), mean, na.rm = TRUE), .groups = 'drop'),
+            by = "year") %>%
+  dplyr::select(year, SSB_lag, Recruitment, Mean_SST, Mean_SBT, Mean_SSS, 
+                phytoplankton, small_zooplankton)
+
+### Run threshold GAM function from "functions" with each variable
+run_threshold_gam(tGAM_data$year, "Recruitment", "SSB_lag", "Mean_SST", "year")
+#### Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 10.5013  
+run_threshold_gam(tGAM_data$year, "Recruitment", "SSB_lag", "Mean_SBT", "year")
+#### Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 8.5684  
+run_threshold_gam(tGAM_data$year, "Recruitment", "SSB_lag", "Mean_SSS", "year")
+#### Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 34.4184  
+run_threshold_gam(tGAM_data$year, "Recruitment", "SSB_lag", "phytoplankton", "year") 
+#### Time range: 1958 - 2021    LOOCV result: TRUE    Model MR: 123351.8   
+run_threshold_gam(tGAM_data$year, "Recruitment", "SSB_lag", "small_zooplankton", "year")
+#### Time range: 1958 - 2021    LOOCV result: TRUE    Model MR: 953.3124  
+
+#### Significant threshold found for phytoplankton and small zooplankton
 ```
