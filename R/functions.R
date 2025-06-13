@@ -76,9 +76,7 @@ process_env_data_seasonal <- function(env_data,
       month %in% c(6, 7, 8) ~ "Summer", 
       month %in% c(9, 10, 11) ~ "Autumn",
       month %in% c(12, 1, 2) ~ "Winter",
-      TRUE ~ NA_character_
-    )
-  }
+      TRUE ~ NA_character_)}
   
   # Get time dimension info
   years <- env_data$years
@@ -92,8 +90,7 @@ process_env_data_seasonal <- function(env_data,
     
     # Validate spatial coordinates
     if (!all(c("lon", "lat") %in% names(env_data))) {
-      stop("Environmental data must contain 'lon' and 'lat' arrays for spatial aggregation")
-    }
+      stop("Environmental data must contain 'lon' and 'lat' arrays for spatial aggregation")}
     
     # Load shapefile
     areas_sf <- st_read(shapefile_path, quiet = TRUE)
@@ -118,8 +115,7 @@ process_env_data_seasonal <- function(env_data,
       
       if (length(within_indices) == 0) {
         warning(paste("No data points found within area:", area_name))
-        next
-      }
+        next}
       
       # Extract lon/lat indices from the grid positions
       lon_indices <- ((within_indices - 1) %% length(env_data$lon)) + 1
@@ -138,8 +134,7 @@ process_env_data_seasonal <- function(env_data,
       for (var in variables) {
         if (!var %in% names(env_data)) {
           warning(paste("Variable", var, "not found in env_data"))
-          next
-        }
+          next}
         
         # Subset the environmental array for this region
         subset_var <- env_data[[var]][unique_lon_indices, unique_lat_indices, , drop = FALSE]
@@ -153,9 +148,7 @@ process_env_data_seasonal <- function(env_data,
             for (lat_idx in 1:length(unique_lat_indices)) {
               # Check if this location has any non-NA values across all time steps
               vals <- subset_var[lon_idx, lat_idx, ]
-              has_data[lon_idx, lat_idx] <- any(!is.na(vals))
-            }
-          }
+              has_data[lon_idx, lat_idx] <- any(!is.na(vals))}}
           
           # Find indices of locations with data
           valid_lon_indices <- which(apply(has_data, 1, any))
@@ -164,17 +157,14 @@ process_env_data_seasonal <- function(env_data,
           # Check if any valid data remains
           if (length(valid_lon_indices) == 0 || length(valid_lat_indices) == 0) {
             warning(paste("No valid data points (all NAs) found for variable", var, "in area:", area_name))
-            next
-          }
+            next}
           
           # Subset to only valid locations
           subset_var <- subset_var[valid_lon_indices, valid_lat_indices, , drop = FALSE]
           n_removed <- (length(unique_lon_indices) * length(unique_lat_indices)) - 
             (length(valid_lon_indices) * length(valid_lat_indices))
           if (n_removed > 0) {
-            cat("    Removed", n_removed, "NA-only grid cells for", var, "\n")
-          }
-        }
+            cat("    Removed", n_removed, "NA-only grid cells for", var, "\n")}}
         
         # Convert to long format efficiently
         dims <- dim(subset_var)
@@ -194,13 +184,9 @@ process_env_data_seasonal <- function(env_data,
               year = years_rep[valid_mask],
               month = months_rep[valid_mask],
               Variable = var,
-              stringsAsFactors = FALSE
-            )
+              stringsAsFactors = FALSE)
             
-            region_data_list[[var]] <- var_df
-          }
-        }
-      }
+            region_data_list[[var]] <- var_df}}}
       
       # Combine all variables for this region
       if (length(region_data_list) > 0) {
@@ -215,10 +201,7 @@ process_env_data_seasonal <- function(env_data,
         
         if (nrow(region_data) > 0) {
           all_region_results[[area_name]] <- region_data
-          cat("  Processed", nrow(region_data), "valid data points\n")
-        }
-      }
-    }
+          cat("  Processed", nrow(region_data), "valid data points\n")}}}
     
     # Combine all regions
     if (length(all_region_results) > 0) {
@@ -236,8 +219,7 @@ process_env_data_seasonal <- function(env_data,
         arrange(Region, year, Season)
       
     } else {
-      stop("No valid data found in any regions")
-    }
+      stop("No valid data found in any regions")}
     
     cat("Spatial aggregation complete.\n")
     cat("Regions found:", length(unique(result$Region)), "\n")
@@ -254,8 +236,7 @@ process_env_data_seasonal <- function(env_data,
         
         if (is.null(var_data)) {
           warning(paste("Variable", .x, "not found in env_data"))
-          return(NULL)
-        }
+          return(NULL)}
         
         # Get dimensions [lon, lat, time]
         dims <- dim(var_data)
@@ -270,8 +251,7 @@ process_env_data_seasonal <- function(env_data,
           # Add season
           mutate(Season = assign_season(month)) %>%
           # Remove rows with missing data
-          filter(!is.na(Value), !is.na(Season))
-      })
+          filter(!is.na(Value), !is.na(Season))})
     
     # Aggregate directly to seasonal data (no spatial separation)
     result <- env_df_seasonal %>%
@@ -283,8 +263,7 @@ process_env_data_seasonal <- function(env_data,
       pivot_wider(names_from = Variable, values_from = Mean_Value, names_prefix = "Mean_") %>%
       arrange(year, Season)
     
-    cat("Temporal aggregation complete.\n")
-  }
+    cat("Temporal aggregation complete.\n")}
   
   # Add summary information
   cat("\n=== ENVIRONMENTAL DATA PROCESSING SUMMARY ===\n")
@@ -294,11 +273,9 @@ process_env_data_seasonal <- function(env_data,
   cat("Seasons:", paste(unique(result$Season), collapse = ", "), "\n")
   
   if ("Region" %in% names(result)) {
-    cat("Spatial regions:", length(unique(result$Region)), "\n")
-  }
+    cat("Spatial regions:", length(unique(result$Region)), "\n")}
   
-  return(result)
-}
+  return(result)}
 
 # Helper function for the efficient spatial subsetting (standalone version)
 subset_environmental_data_shapefile <- function(combined_data, 
@@ -328,8 +305,7 @@ subset_environmental_data_shapefile <- function(combined_data,
     
     if (length(within_indices) == 0) {
       warning(paste("No data points found within area:", area_name))
-      next
-    }
+      next}
     
     ### Extract lon/lat indices from the grid positions
     lon_indices <- ((within_indices - 1) %% length(combined_data$lon)) + 1
@@ -361,9 +337,7 @@ subset_environmental_data_shapefile <- function(combined_data,
           ### Location has data if any variable has at least one non-NA value
           has_data[lon_idx, lat_idx] <- any(!is.na(sst_vals)) | 
             any(!is.na(sbt_vals)) | 
-            any(!is.na(sss_vals))
-        }
-      }
+            any(!is.na(sss_vals))}}
       
       ### Find indices of locations with data
       valid_lon_indices <- which(apply(has_data, 1, any))
@@ -372,8 +346,7 @@ subset_environmental_data_shapefile <- function(combined_data,
       ### Check if any valid data remains
       if (length(valid_lon_indices) == 0 || length(valid_lat_indices) == 0) {
         warning(paste("No valid data points (all NAs) found within area:", area_name))
-        next
-      }
+        next}
       
       ### Subset to only valid locations
       subset_SST <- subset_SST[valid_lon_indices, valid_lat_indices, , drop = FALSE]
@@ -386,9 +359,7 @@ subset_environmental_data_shapefile <- function(combined_data,
       n_removed <- (length(unique_lon_indices) * length(unique_lat_indices)) - 
         (length(valid_lon_indices) * length(valid_lat_indices))
       if (n_removed > 0) {
-        message(paste("Removed", n_removed, "NA-only grid cells from area:", area_name))
-      }
-    }
+        message(paste("Removed", n_removed, "NA-only grid cells from area:", area_name))}}
     
     ### Create final subset list
     subset_env_list <- list(
@@ -400,15 +371,12 @@ subset_environmental_data_shapefile <- function(combined_data,
       years = combined_data$years,
       months = combined_data$months,
       dates = combined_data$dates,
-      area_polygon = areas_sf[i, ]  # Store the polygon for reference
-    )
+      area_polygon = areas_sf[i, ])
     
     ### Store data in the 'environmental_subsets_by_area' list
-    environmental_subsets_by_area[[area_name]] <- subset_env_list
-  }
+    environmental_subsets_by_area[[area_name]] <- subset_env_list}
   
-  return(environmental_subsets_by_area)
-}
+  return(environmental_subsets_by_area)}
 
 
 #--------------------------------------------------------------------------------------
@@ -426,9 +394,7 @@ process_food_availability <- function(cpr_data,
       month %in% c(6, 7, 8) ~ "Summer", 
       month %in% c(9, 10, 11) ~ "Autumn",
       month %in% c(12, 1, 2) ~ "Winter",
-      TRUE ~ NA_character_
-    )
-  }
+      TRUE ~ NA_character_)}
   
   # Step 1: Calculate food availability for each sample
   processed_data <- cpr_data %>%
@@ -488,8 +454,7 @@ process_food_availability <- function(cpr_data,
       ) %>%
       arrange(Year, Season)
     
-    cat("Temporal aggregation complete.\n")
-  }
+    cat("Temporal aggregation complete.\n")}
   
   # Step 3: Add summary information
   cat("\n=== PROCESSING SUMMARY ===\n")
@@ -499,8 +464,7 @@ process_food_availability <- function(cpr_data,
   cat("Seasons:", paste(unique(result$Season), collapse = ", "), "\n")
   
   if ("region" %in% names(result)) {
-    cat("Spatial regions:", length(unique(result$region)), "\n")
-  }
+    cat("Spatial regions:", length(unique(result$region)), "\n")}
   
   # Data quality summary
   cat("\n=== DATA QUALITY ===\n")
@@ -508,8 +472,7 @@ process_food_availability <- function(cpr_data,
   cat("Records with <5 samples:", sum(result$sample_count < 5), "\n")
   cat("Mean food availability:", round(mean(result$average_food), 1), "\n")
   
-  return(result)
-}
+  return(result)}
 
 
 #--------------------------------------------------------------------------------------
@@ -536,12 +499,10 @@ test_data_quality <- function(food_data) {
   } else if (total_results$usable) {
     cat("! Use total_food - average_food has quality issues\n")
   } else {
-    cat("X Both metrics have issues - preprocessing required\n")
-  }
+    cat("X Both metrics have issues - preprocessing required\n")}
   
   # Return nothing (invisible)
-  invisible()
-}
+  invisible()}
 
 # Internal function to assess individual columns
 assess_column <- function(food_data, test_column) {
@@ -560,8 +521,7 @@ assess_column <- function(food_data, test_column) {
   } else {
     cv <- NA
     mean_val <- test_values[1]
-    median_val <- test_values[1]
-  }
+    median_val <- test_values[1]}
   
   # Outlier detection
   if (n >= 4) {
@@ -571,8 +531,7 @@ assess_column <- function(food_data, test_column) {
     extreme_outliers <- sum(test_values < (Q1 - 3*IQR) | test_values > (Q3 + 3*IQR))
     extreme_outlier_percent <- (extreme_outliers / n) * 100
   } else {
-    extreme_outlier_percent <- 0
-  }
+    extreme_outlier_percent <- 0}
   
   # Quality assessment
   critical_issues <- c()
@@ -586,8 +545,7 @@ assess_column <- function(food_data, test_column) {
     critical_issues <- c(critical_issues, "insufficient_sample_size")
     cat("X Sample size =", n, "(< 10) - Insufficient for robust statistics\n")
   } else {
-    cat("✓ Sample size =", n, "(>= 10)\n")
-  }
+    cat("✓ Sample size =", n, "(>= 10)\n")}
   
   # Major checks
   if (zero_percent > 30) {
@@ -597,8 +555,7 @@ assess_column <- function(food_data, test_column) {
     minor_issues <- c(minor_issues, "moderate_zeros")
     cat("! Zero values =", round(zero_percent, 1), "% (> 15%) - Moderate level\n")
   } else {
-    cat("✓ Zero values =", round(zero_percent, 1), "% (<= 15%)\n")
-  }
+    cat("✓ Zero values =", round(zero_percent, 1), "% (<= 15%)\n")}
   
   if (is.finite(cv)) {
     if (cv > 4) {
@@ -608,16 +565,13 @@ assess_column <- function(food_data, test_column) {
       minor_issues <- c(minor_issues, "high_variability")
       cat("! CV =", round(cv, 2), "(> 2.5) - High but acceptable\n")
     } else {
-      cat("✓ CV =", round(cv, 2), "(<= 2.5)\n")
-    }
-  }
+      cat("✓ CV =", round(cv, 2), "(<= 2.5)\n")}}
   
   if (extreme_outlier_percent > 10) {
     major_issues <- c(major_issues, "excessive_extreme_outliers")
     cat("X Extreme outliers =", round(extreme_outlier_percent, 1), "% (> 10%) - Likely data errors\n")
   } else {
-    cat("✓ Outliers =", round(extreme_outlier_percent, 1), "% (<= 10%) - Acceptable range\n")
-  }
+    cat("✓ Outliers =", round(extreme_outlier_percent, 1), "% (<= 10%) - Acceptable range\n")}
   
   # Mean-median ratio check
   if (is.finite(mean_val) && is.finite(median_val) && median_val > 0) {
@@ -627,8 +581,7 @@ assess_column <- function(food_data, test_column) {
       cat("! Mean/Median ratio =", round(mean_median_ratio, 2), "- Highly skewed\n")
     } else {
       cat("✓ Mean/Median ratio =", round(mean_median_ratio, 2), "- Acceptable skewness\n")
-    }
-  }
+    }}
   
   # Negative values check
   min_val <- min(test_values, na.rm = TRUE)
@@ -654,11 +607,9 @@ assess_column <- function(food_data, test_column) {
     cat("! QUALITY: USABLE - Multiple minor issues but acceptable\n")
   } else {
     usable <- TRUE
-    cat("✓ QUALITY: GOOD - Suitable for analysis\n")
-  }
+    cat("✓ QUALITY: GOOD - Suitable for analysis\n")}
   
-  return(list(usable = usable))
-}
+  return(list(usable = usable))}
 
 
 #--------------------------------------------------------------------------------------
@@ -679,8 +630,7 @@ plot_env_data_dual <- function(env_df_full_seasonal, env_df_subset_seasonal,
     
     # Filter by season if specified
     if (season_filter != "All") {
-      cpr_data <- cpr_data %>% filter(Season == season_filter)
-    }
+      cpr_data <- cpr_data %>% filter(Season == season_filter)}
     
     if (is.null(region_name)) {
       # For full stock data
@@ -694,8 +644,7 @@ plot_env_data_dual <- function(env_df_full_seasonal, env_df_subset_seasonal,
         # Seasonal data (already filtered above)
         result <- cpr_data %>%
           rename(year = Year) %>%
-          dplyr::select(year, average_food)
-      }
+          dplyr::select(year, average_food)}
     } else {
       # For regional data
       if (season_filter == "All") {
@@ -710,12 +659,9 @@ plot_env_data_dual <- function(env_df_full_seasonal, env_df_subset_seasonal,
         result <- cpr_data %>%
           filter(region == region_name) %>%
           rename(year = Year) %>%
-          dplyr::select(year, average_food)
-      }
-    }
+          dplyr::select(year, average_food)}}
     
-    return(result)
-  }
+    return(result)}
   
   # Function to get CPR data for a specific region/column
   get_cpr_data <- function(cpr_data, region_name, data_years, season_filter = "All") {
@@ -724,8 +670,7 @@ plot_env_data_dual <- function(env_df_full_seasonal, env_df_subset_seasonal,
     agg_data <- aggregate_cpr_data(cpr_data, region_name, season_filter)
     
     if (is.null(agg_data) || nrow(agg_data) == 0) {
-      return(rep(1, length(data_years)))
-    }
+      return(rep(1, length(data_years)))}
     
     # Match years and fill missing with interpolation only within data range
     matched_data <- data.frame(year = data_years) %>%
@@ -742,19 +687,16 @@ plot_env_data_dual <- function(env_df_full_seasonal, env_df_subset_seasonal,
                                   xout = matched_data$year[within_range], 
                                   rule = 1)$y
       
-      matched_data$average_food[within_range] <- interpolated_vals
-    }
+      matched_data$average_food[within_range] <- interpolated_vals}
     
-    return(matched_data$average_food)
-  }
+    return(matched_data$average_food)}
   
   # Helper function to create desaturated colors
   desaturate_color <- function(color, amount = 0.5) {
     # Convert to HSV and reduce saturation
     hsv_color <- rgb2hsv(col2rgb(color))
     hsv_color[2] <- hsv_color[2] * amount  # Reduce saturation
-    return(hsv(hsv_color[1], hsv_color[2], hsv_color[3]))
-  }
+    return(hsv(hsv_color[1], hsv_color[2], hsv_color[3]))}
   
   # Create time series plot with dual layers (yearly + autumn)
   create_ts_plot_dual <- function(data_yearly, data_autumn, y_var_yearly, y_var_autumn, y_label, 
@@ -784,8 +726,7 @@ plot_env_data_dual <- function(env_df_full_seasonal, env_df_subset_seasonal,
         axis.title.x = if(is_bottom) element_text(size = 9) else element_blank(),
         axis.text.x = if(is_bottom) element_text(size = 8) else element_blank(),
         axis.title.y = if(is_first_col) element_text(size = 9) else element_blank(),
-        plot.margin = margin(5, 5, 5, 5)
-      ) +
+        plot.margin = margin(5, 5, 5, 5)) +
       labs(
         x = if(is_bottom) "Year" else "",
         y = if(is_first_col) y_label else "")
@@ -793,11 +734,9 @@ plot_env_data_dual <- function(env_df_full_seasonal, env_df_subset_seasonal,
     # Add column header
     if (!is.null(column_name)) {
       p <- p + annotate("text", x = Inf, y = Inf, label = column_name, 
-                        hjust = 1.1, vjust = 1.5, size = 3, fontface = "bold")
-    }
+                        hjust = 1.1, vjust = 1.5, size = 3, fontface = "bold")}
     
-    return(p)
-  }
+    return(p)}
   
   # Create plots for each column
   create_column_plots <- function(data_env_seasonal, column_name, is_first_col = FALSE) {
@@ -824,8 +763,7 @@ plot_env_data_dual <- function(env_df_full_seasonal, env_df_subset_seasonal,
       phyto_vals_yearly <- get_cpr_data(cpr_component_data$phyto, column_name, data_years, "All")
       phyto_vals_autumn <- get_cpr_data(cpr_component_data$phyto, column_name, data_env_autumn$year, "Autumn")
       small_vals_yearly <- get_cpr_data(cpr_component_data$small, column_name, data_years, "All")
-      small_vals_autumn <- get_cpr_data(cpr_component_data$small, column_name, data_env_autumn$year, "Autumn")
-    }
+      small_vals_autumn <- get_cpr_data(cpr_component_data$small, column_name, data_env_autumn$year, "Autumn")}
     
     # Create data frames
     phyto_df_yearly <- data.frame(year = data_years, phytoplankton = phyto_vals_yearly)
@@ -852,24 +790,145 @@ plot_env_data_dual <- function(env_df_full_seasonal, env_df_subset_seasonal,
                           NULL, FALSE, is_first_col, color),
       create_ts_plot_dual(data_env_yearly, data_env_autumn, env_vars$sss, env_vars$sss, 
                           "SSS (PSU)", 
-                          NULL, TRUE, is_first_col, color)
-    )
+                          NULL, TRUE, is_first_col, color))
     
-    return(wrap_plots(plots, ncol = 1))
-  }
+    return(wrap_plots(plots, ncol = 1))}
   
   # Generate all columns
   plot_list <- list(create_column_plots(env_df_full_seasonal, "Full Stock", TRUE))
   
   for (area in areas) {
     area_data <- env_df_subset_seasonal %>% filter(Region == area) %>% arrange(year, Season)
-    plot_list <- append(plot_list, list(create_column_plots(area_data, area, FALSE)))
-  }
+    plot_list <- append(plot_list, list(create_column_plots(area_data, area, FALSE)))}
   
   # Combine into final plot
-  return(wrap_plots(plot_list, nrow = 1))
-}
+  return(wrap_plots(plot_list, nrow = 1))}
 
+
+# Functions for "data_analysis.Rmd"
+#--------------------------------------------------------------------------------------
+## Analyse SSB change-points
+#--------------------------------------------------------------------------------------
+
+changepoint_analysis <- function(data, 
+                                 ssb_col = "SSB_component", 
+                                 year_col = "year",
+                                 region_name = "Region",
+                                 Q = 6,
+                                 bcp_threshold = 0.7,
+                                 consensus_tolerance = 1,
+                                 min_years_between = 5,
+                                 plot_results = TRUE) {
+  
+  # Print region being analyzed
+  cat("=== Changepoint Analysis for", region_name, "===\n")
+  
+  # Validate inputs
+  if (!ssb_col %in% names(data)) {
+    stop("SSB column '", ssb_col, "' not found in data")}
+  if (!year_col %in% names(data)) {
+    stop("Year column '", year_col, "' not found in data")}
+  
+  # Remove rows with missing values
+  analysis_data <- data[complete.cases(data[c(ssb_col, year_col)]), ]
+  
+  if(nrow(analysis_data) < nrow(data)) {
+    cat("# Removed", nrow(data) - nrow(analysis_data), "rows with missing values\n")}
+  
+  cat("# Data range:", range(analysis_data[[year_col]])[1], "-", 
+      range(analysis_data[[year_col]])[2], "\n")
+  cat("# Analysis parameters: Q =", Q, ", BCP threshold =", bcp_threshold, "\n")
+  
+  # CPT Analysis (BinSeg method)
+  cat("\n## CPT Analysis (BinSeg)\n")
+  ssbcpts <- cpt.mean(data = analysis_data[[ssb_col]], method = "BinSeg", Q = Q)
+  cpt_indices <- cpts(ssbcpts)
+  cpt_years <- analysis_data[[year_col]][cpt_indices]
+  
+  cat("# CPT changepoint indices:", paste(cpt_indices, collapse = ", "), "\n")
+  cat("# CPT changepoint years:", paste(cpt_years, collapse = ", "), "\n")
+  
+  if(plot_results) {
+    plot(ssbcpts, type = "l", cpt.col = "navyblue", 
+         xlab = "Index", lwd = 4,
+         main = paste("CPT Analysis -", region_name))}
+  
+  # BCP Analysis
+  cat("\n## BCP Analysis\n")
+  bcp.ssb <- bcp(analysis_data[[ssb_col]])
+  bcp_indices <- which(bcp.ssb$posterior.prob >= bcp_threshold)
+  bcp_years <- analysis_data[[year_col]][bcp_indices]
+  
+  cat("# BCP changepoint indices:", paste(bcp_indices, collapse = ", "), "\n")
+  cat("# BCP changepoint years:", paste(bcp_years, collapse = ", "), "\n")
+  
+  if(plot_results) {
+    plot(bcp.ssb, main = paste("BCP Analysis -", region_name))}
+  
+  # Consensus Analysis
+  cat("\n## Consensus Analysis\n")
+  consensus_years <- c()
+  
+  # Find consensus points (within tolerance)
+  for (cpt_year in cpt_years) {
+    if (any(abs(bcp_years - cpt_year) <= consensus_tolerance)) {
+      consensus_years <- c(consensus_years, cpt_year)}}
+  
+  # Apply minimum spacing rule
+  if (length(consensus_years) > 1) {
+    consensus_years <- sort(consensus_years)
+    filtered_consensus <- consensus_years[1]
+    
+    for (i in 2:length(consensus_years)) {
+      if (consensus_years[i] - tail(filtered_consensus, 1) >= min_years_between) {
+        filtered_consensus <- c(filtered_consensus, consensus_years[i])}}
+    consensus_years <- filtered_consensus}
+  
+  # Identify method-specific changepoints
+  cpt_only_years <- setdiff(cpt_years, consensus_years)
+  bcp_only_years <- setdiff(bcp_years, consensus_years)
+  
+  cat("# Consensus changepoints (±", consensus_tolerance, "yr, min", min_years_between, "yr apart):", 
+      paste(consensus_years, collapse = ", "), "\n")
+  
+  if (length(cpt_only_years) > 0) {
+    cat("# CPT only:", paste(cpt_only_years, collapse = ", "), "\n")
+  }
+  if (length(bcp_only_years) > 0) {
+    cat("# BCP only:", paste(bcp_only_years, collapse = ", "), "\n")}
+  
+  # Create results structure
+  results <- list(
+    region = region_name,
+    parameters = list(
+      Q = Q,
+      bcp_threshold = bcp_threshold,
+      consensus_tolerance = consensus_tolerance,
+      min_years_between = min_years_between),
+    data_info = list(
+      n_observations = nrow(analysis_data),
+      year_range = range(analysis_data[[year_col]]),
+      ssb_range = range(analysis_data[[ssb_col]], na.rm = TRUE)),
+    cpt_analysis = list(
+      model = ssbcpts,
+      changepoint_indices = cpt_indices,
+      changepoint_years = cpt_years,
+      n_changepoints = length(cpt_years)),
+    bcp_analysis = list(
+      model = bcp.ssb,
+      changepoint_indices = bcp_indices,
+      changepoint_years = bcp_years,
+      n_changepoints = length(bcp_years),
+      threshold_used = bcp_threshold),
+    consensus = list(
+      changepoint_years = consensus_years,
+      cpt_only_years = cpt_only_years,
+      bcp_only_years = bcp_only_years,
+      n_consensus = length(consensus_years),
+      criteria = paste("Both methods ±", consensus_tolerance, "year, min", min_years_between, "years between points")))
+  
+  cat("\n")
+  return(results)}
 
 #--------------------------------------------------------------------------------------
 ## Plot SSB change-points
@@ -913,8 +972,7 @@ plot_SSB_cpt <- function(data, changepoints, component, SSB_column, l_bnd_column
   # Scale to full stock proportio if enabled
   if (scale_to_full) {
     p <- p + xlim(1947, 2025) +
-      ylim(0, 7)
-  }
+      ylim(0, 7)}
   
   # Add horizontal lines if enabled
   if (show_hlines) {
@@ -951,13 +1009,11 @@ plot_SSB_cpt <- function(data, changepoints, component, SSB_column, l_bnd_column
 #--------------------------------------------------------------------------------------
 
 opt_bpts <- function(x) {
-  #x = bpts_sum$RSS["BIC",]
   n <- length(x)
   lowest <- vector("logical", length = n-1)
   lowest[1] <- FALSE
   for (i in 2:n) {
-    lowest[i] <- x[i] < x[i-1] & x[i] < x[i+1]
-  }
+    lowest[i] <- x[i] < x[i-1] & x[i] < x[i+1]}
   out <- as.integer(names(x)[lowest])
   return(out)}
 
@@ -1062,15 +1118,12 @@ plot_hysteresis <- function(data, break_years, component,
       list(nudge_y = 0, nudge_x = 0.2),
       list(nudge_y = -0.5, nudge_x = 0.2),
       list(nudge_y = 0, nudge_x = -0.2),
-      list(nudge_y = 0, nudge_x = 0.2)
-    )
-  }
+      list(nudge_y = 0, nudge_x = 0.2))}
   
   # Create phase assignment vector
   phase_assignment <- rep(1, nrow(data))
   for (i in 1:n_breaks) {
-    phase_assignment[data$year > break_years[i]] <- i + 1
-  }
+    phase_assignment[data$year > break_years[i]] <- i + 1}
   
   # Assign colors based on phase
   hyst_phases <- colors[phase_assignment]
@@ -1086,9 +1139,7 @@ plot_hysteresis <- function(data, break_years, component,
       phase_data_list[[i]] <- data %>% filter(year > break_years[n_breaks])
     } else {
       # Middle phases: between break years
-      phase_data_list[[i]] <- data %>% filter(year > break_years[i-1] & year <= break_years[i])
-    }
-  }
+      phase_data_list[[i]] <- data %>% filter(year > break_years[i-1] & year <= break_years[i])}}
   
   # Create the base plot
   p <- ggplot(data = data, aes(x = F, y = SSB_lag/1000000)) +
@@ -1103,24 +1154,20 @@ plot_hysteresis <- function(data, break_years, component,
     p <- p + 
       geom_hline(yintercept = msy_btrigger/1000000, linetype = "dashed", color = "gray30") +
       geom_label(x = 1, y = msy_btrigger/1000000, label = expression("MSY B"[trigger]), 
-                 color = "gray30", size = 3.5, fontface = "bold")
-  }
+                 color = "gray30", size = 3.5, fontface = "bold")}
   
   # Add F_MSY line and label only if show_fmsy is TRUE
   if (show_fmsy) {
     p <- p + 
       geom_vline(xintercept = fmsy, linetype = "dashed", color = "gray30") +
       geom_label(x = fmsy, y = 0.5, label = expression("F"[MSY]), 
-                 color = "gray30", size = 3.5)
-  }
+                 color = "gray30", size = 3.5)}
   
   # Add geom_smooth for each phase (only if data exists)
   for (i in 1:n_phases) {
     if (nrow(phase_data_list[[i]]) > 0) {
       p <- p + geom_smooth(data = phase_data_list[[i]], aes(x = F, y = SSB_lag/1000000),
-                           method = "lm", colour = colors[i])
-    }
-  }
+                           method = "lm", colour = colors[i])}}
   
   # Add text labels for break years (only for existing break years)
   for (i in 1:n_breaks) {
@@ -1131,9 +1178,7 @@ plot_hysteresis <- function(data, break_years, component,
       
       p <- p + geom_text_repel(data = break_year_data, aes(label = year),
                                point.padding = 0.2, nudge_y = nudge_y, nudge_x = nudge_x,
-                               size = 3, col = "black", segment.size = 0.2)
-    }
-  }
+                               size = 3, col = "black", segment.size = 0.2)}}
   
   # Add labels for first and last years
   # Use the last element of nudge_params for start/end years, or default values
@@ -1144,12 +1189,11 @@ plot_hysteresis <- function(data, break_years, component,
                            point.padding = 0.2, nudge_y = end_nudge_y, nudge_x = end_nudge_x,
                            size = 3, col = "black", segment.size = 0.2)
   
-  return(p)
-}
+  return(p)}
 
 
 #--------------------------------------------------------------------------------------
-## Extract SSR Breakpoints
+## Extract SRR Breakpoints
 #--------------------------------------------------------------------------------------
 
 srr_breakpoint_analysis <- function(data, ssb_col = "SSB", r_col = "Recruitment", year_col = "year",
@@ -1164,23 +1208,20 @@ srr_breakpoint_analysis <- function(data, ssb_col = "SSB", r_col = "Recruitment"
   analysis_data <- data[complete.cases(data[c(ssb_col, r_col, year_col)]), ]
   
   if(nrow(analysis_data) < nrow(data)) {
-    cat("# Removed", nrow(data) - nrow(analysis_data), "rows with missing values\n")
-  }
+    cat("# Removed", nrow(data) - nrow(analysis_data), "rows with missing values\n")}
   
   # Initialize results list
   results <- list(
     region = region_name,
     method = method,
-    data_used = analysis_data
-  )
+    data_used = analysis_data)
   
   if(method == "strucchange") {
     # Original strucchange analysis
     bpts_SRR <- strucchange::breakpoints(analysis_data[[r_col]] ~ analysis_data[[ssb_col]])
     
     if(plot_breakpoints) {
-      plot(bpts_SRR, main = paste("SRR Breakpoints for", region_name))
-    }
+      plot(bpts_SRR, main = paste("SRR Breakpoints for", region_name))}
     
     # Get summary and find optimal breaks
     bpts_SRR_sum <- summary(bpts_SRR)
@@ -1213,8 +1254,7 @@ srr_breakpoint_analysis <- function(data, ssb_col = "SSB", r_col = "Recruitment"
     for (i in 1:opt_brks_SRR[1]) {
       abline(v = analysis_data[[ssb_col]][ci_mod_SRR$confint[i,2]], col = "blue", lwd = 2)
       abline(v = analysis_data[[ssb_col]][ci_mod_SRR$confint[i,1]], col = "red", lty = 3)
-      abline(v = analysis_data[[ssb_col]][ci_mod_SRR$confint[i,3]], col = "red", lty = 3)
-    }
+      abline(v = analysis_data[[ssb_col]][ci_mod_SRR$confint[i,3]], col = "red", lty = 3)}
     
     legend("topright", legend = c("Best estimate", "Confidence limits"), 
            col = c("blue", "red"), lty = c(1, 3), lwd = c(2, 1))
@@ -1226,8 +1266,7 @@ srr_breakpoint_analysis <- function(data, ssb_col = "SSB", r_col = "Recruitment"
       break_ssb_values = best_brk_SRR,
       break_years = best_brk_years_SRR,
       confidence_intervals = ci_mod_SRR,
-      summary = bpts_SRR_sum
-    ))
+      summary = bpts_SRR_sum))
     
   } else if(method == "segmented") {
     # Segmented model analysis
@@ -1238,8 +1277,7 @@ srr_breakpoint_analysis <- function(data, ssb_col = "SSB", r_col = "Recruitment"
       initial_psi <- mean(analysis_data[[ssb_col]], na.rm = TRUE)
       cat("# Using mean SSB as initial psi:", round(initial_psi, 2), "\n")
     } else {
-      cat("# Using provided initial psi:", round(initial_psi, 2), "\n")
-    }
+      cat("# Using provided initial psi:", round(initial_psi, 2), "\n")}
     
     # Fit linear model first
     lm_model <- lm(formula(paste(r_col, "~", ssb_col)), data = analysis_data)
@@ -1281,8 +1319,7 @@ srr_breakpoint_analysis <- function(data, ssb_col = "SSB", r_col = "Recruitment"
                legend = c("Segmented fit", "Breakpoint", "95% CI"), 
                col = c("red", "blue", "red"), 
                lty = c(1, 2, 3), 
-               lwd = c(2, 2, 1))
-      }
+               lwd = c(2, 2, 1))}
       
       # Add segmented-specific results to output
       results <- c(results, list(
@@ -1294,8 +1331,7 @@ srr_breakpoint_analysis <- function(data, ssb_col = "SSB", r_col = "Recruitment"
         fitted_values = seg_model$fitted.values,
         coefficients = coef(seg_model),
         summary = seg_summary,
-        initial_psi = initial_psi
-      ))
+        initial_psi = initial_psi))
       
     }, error = function(e) {
       cat("# Error in segmented analysis:", e$message, "\n")
@@ -1303,17 +1339,13 @@ srr_breakpoint_analysis <- function(data, ssb_col = "SSB", r_col = "Recruitment"
       
       results <<- c(results, list(
         error = e$message,
-        initial_psi = initial_psi
-      ))
-    })
+        initial_psi = initial_psi))})
     
   } else {
-    stop("Method must be either 'strucchange' or 'segmented'")
-  }
+    stop("Method must be either 'strucchange' or 'segmented'")}
   
   cat("\n")
-  return(results)
-}
+  return(results)}
 
 
 #--------------------------------------------------------------------------------------
@@ -1331,8 +1363,7 @@ plot_SRR <- function(data, break_years, title_stock, used_model,
   required_cols <- c(ssb_col, r_col, year_col)
   missing_cols <- required_cols[!required_cols %in% names(data)]
   if (length(missing_cols) > 0) {
-    stop("Missing columns in data: ", paste(missing_cols, collapse = ", "))
-  }
+    stop("Missing columns in data: ", paste(missing_cols, collapse = ", "))}
   
   # Determine number of break years and resulting phases
   n_breaks <- length(break_years)
@@ -1341,8 +1372,7 @@ plot_SRR <- function(data, break_years, title_stock, used_model,
   # Create phase column based on break years
   data$phase <- 1
   for (i in 1:n_breaks) {
-    data$phase[data[[year_col]] > break_years[i]] <- i + 1
-  }
+    data$phase[data[[year_col]] > break_years[i]] <- i + 1}
   
   # Set default nudge parameters if not provided
   if (is.null(nudge_params)) {
@@ -1351,9 +1381,7 @@ plot_SRR <- function(data, break_years, title_stock, used_model,
       list(nudge_y = 0, nudge_x = -0.5),  # breakpoint
       list(nudge_y = -5, nudge_x = -0.2), # last year
       list(nudge_y = 5, nudge_x = -0.2),  # more breakpoints
-      list(nudge_y = -0, nudge_x = -0.2)
-    )
-  }
+      list(nudge_y = -0, nudge_x = -0.2))}
   
   # Create the plot using the specified column names
   p <- ggplot(data = data, aes(x = .data[[ssb_col]] / 1000000, y = .data[[r_col]] / 1000000)) +
@@ -1375,8 +1403,7 @@ plot_SRR <- function(data, break_years, title_stock, used_model,
     p <- p + 
       geom_vline(xintercept = Blim / 1000000, linetype = "dashed", color = "gray30") +
       geom_label(x = Blim / 1000000, y = 7, label = expression("B"[lim]),
-                 color = "gray30", size = 3.5, fontface = "bold")
-  }
+                 color = "gray30", size = 3.5, fontface = "bold")}
   
   # Add geom_smooth for each phase
   for (i in 1:n_phases) {
@@ -1385,9 +1412,7 @@ plot_SRR <- function(data, break_years, title_stock, used_model,
       p <- p + geom_smooth(data = phase_data,
                            mapping = aes(x = .data[[ssb_col]] / 1000000, 
                                          y = .data[[r_col]] / 1000000),
-                           col = colors[i], method = "lm")
-    }
-  }
+                           col = colors[i], method = "lm")}}
   
   # Add text labels for the first and last years
   p <- p + geom_text_repel(data = data[1, ], 
@@ -1414,20 +1439,16 @@ plot_SRR <- function(data, break_years, title_stock, used_model,
                                point.padding = 0.2,
                                nudge_y = nudge_params[[nudge_idx]]$nudge_y,
                                nudge_x = nudge_params[[nudge_idx]]$nudge_x,
-                               size = 3, col = "gray30", segment.size = 0.2)
-    }
-  }
+                               size = 3, col = "gray30", segment.size = 0.2)}}
   
-  return(p)
-}
+  return(p)}
 
 
 #--------------------------------------------------------------------------------------
-## tGAM Analysis
+## Threshold GAM Analysis Functions
 #--------------------------------------------------------------------------------------
 
-# Robust threshold GAM function with automatic NA handling
-
+# Core threshold GAM function
 run_threshold_gam <- function(data, 
                               response_var, 
                               pressure_var, 
@@ -1447,18 +1468,11 @@ run_threshold_gam <- function(data,
     first_complete <- which.max(complete_rows)  # First TRUE
     last_complete <- max(which(complete_rows))  # Last TRUE
     
-    cat("=== DATA RANGE ANALYSIS ===\n")
-    cat("Total rows in dataset:", nrow(data), "\n")
-    cat("Complete cases for analysis:", sum(complete_rows), "\n")
-    cat("Optimal data range:", data[[time_var]][first_complete], "-", data[[time_var]][last_complete], "\n\n")
-    
     return(list(
       start_idx = first_complete,
       end_idx = last_complete,
       complete_rows = complete_rows,
-      n_complete = sum(complete_rows)
-    ))
-  }
+      n_complete = sum(complete_rows)))}
   
   # Required variables for the analysis
   required_vars <- c(response_var, pressure_var, threshold_var, time_var)
@@ -1467,8 +1481,7 @@ run_threshold_gam <- function(data,
   data_range <- find_complete_data_range(data, required_vars)
   
   if (data_range$n_complete < 10) {
-    stop("Insufficient data: Need at least 10 complete observations for GAM analysis")
-  }
+    stop("Insufficient data: Need at least 10 complete observations for GAM analysis")}
   
   # Step 2: Subset data to optimal range
   analysis_data <- data[data_range$start_idx:data_range$end_idx, ]
@@ -1477,8 +1490,7 @@ run_threshold_gam <- function(data,
   complete_analysis <- complete.cases(analysis_data[required_vars])
   if (!all(complete_analysis)) {
     warning("Some NAs found in middle of data range - removing these rows")
-    analysis_data <- analysis_data[complete_analysis, ]
-  }
+    analysis_data <- analysis_data[complete_analysis, ]}
   
   # Step 3: Extract variables for analysis
   y <- analysis_data[[response_var]]
@@ -1500,8 +1512,7 @@ run_threshold_gam <- function(data,
     name_t_var = threshold_var,
     k = 4, 
     a = 0.2, 
-    b = 0.8
-  )
+    b = 0.8)
   
   # Step 6: Cross-validation
   loocv_result <- loocv_thresh_gam(
@@ -1513,34 +1524,198 @@ run_threshold_gam <- function(data,
     k = 4, 
     a = 0.2, 
     b = 0.8, 
-    time = time
-  )
+    time = time)
   
   # Step 7: Print key results in readable format
-  cat("=== ANALYSIS RESULTS ===\n")
-  cat("Original data size:", nrow(data), "observations\n")
-  cat("Analysis data size:", length(y), "observations\n")
-  cat("Time range:", min(time), "-", max(time), "\n")
-  cat("LOOCV result:", loocv_result$result, "\n")
-  cat("Model MR:", round(tmod$mr, 4), "\n\n")
-  cat("Analysis complete!\n")
-}
+  cat("#### Time range:", min(time), "-", max(time), "   ")
+  cat("LOOCV result:", loocv_result$result, "  ")
+  cat("Model MR:", round(tmod$mr, 4), "\n")}
 
-# Helper function to summarize GAM results across multiple analyses
-summarize_gam_results <- function(gam_results_list, dataset_names) {
+#--------------------------------------------------------------------------------------
+## Automated Threshold Analysis Workflow
+#--------------------------------------------------------------------------------------
+
+run_threshold_analysis <- function(herring_region_data, cpr_data, env_data, region_name = NULL) {
   
-  cat("=== GAM ANALYSIS SUMMARY ===\n\n")
-  
-  for (i in seq_along(gam_results_list)) {
-    result <- gam_results_list[[i]]
-    name <- dataset_names[i]
+  # Check if we need to filter by region or use data as-is
+  if (!is.null(region_name)) {
+    # Filter CPR components by region
+    cpr_region <- list(
+      phyto = cpr_data$phyto %>% filter(region == region_name),
+      small = cpr_data$small %>% filter(region == region_name))
     
-    cat("Dataset:", name, "\n")
-    cat("  Data used:", result$analysis_data_size, "/", result$original_data_size, 
-        "(", round(100 * result$analysis_data_size / result$original_data_size, 1), "%)\n")
-    cat("  Time range:", result$time_range[1], "-", result$time_range[2], "\n")
-    cat("  Variables:", paste(result$variables_used, collapse = ", "), "\n")
-    cat("  LOOCV RMSE:", round(result$loocv_result$cv_rmse, 3), "\n")
-    cat("  Model deviance explained:", round(result$model$cv_dev_expl * 100, 1), "%\n\n")
-  }
-}
+    # Filter environmental data by region
+    env_region <- env_data %>% filter(Region == region_name)
+    
+    # Check if filtered data has rows
+    if (nrow(cpr_region$phyto) == 0) {
+      warning(paste("No phytoplankton data found for region:", region_name))}
+    if (nrow(cpr_region$small) == 0) {
+      warning(paste("No small zooplankton data found for region:", region_name))}
+    if (nrow(env_region) == 0) {
+      warning(paste("No environmental data found for region:", region_name))}
+  } else {
+    # Use data as-is without filtering
+    cpr_region <- cpr_data
+    env_region <- env_data
+    region_name <- "FULL DATASET"}
+  
+  # Initialize results storage for tracking significant thresholds
+  significant_thresholds <- list(
+    autumn = list(),
+    lagged = list(),
+    year = list())
+  
+  # Print header
+  cat("\n", paste(rep("=", 60), collapse = ""), "\n", sep = "")
+  cat("THRESHOLD GAM ANALYSIS FOR", toupper(region_name), "\n")
+  cat(paste(rep("=", 60), collapse = ""), "\n\n", sep = "")
+  
+  ## Autumn based analysis
+  cat("## Autumn based analysis\n")
+  
+  # Merge data for autumn
+  autumn_data <- herring_region_data %>%
+    left_join(cpr_region$phyto %>% filter(Season == "Autumn"), 
+              by = c("year" = "Year")) %>%
+    left_join(cpr_region$small %>% filter(Season == "Autumn"), 
+              by = c("year" = "Year"), suffix = c("_phyto", "_small")) %>%
+    left_join(env_region %>% filter(Season == "Autumn"), 
+              by = c("year")) %>%
+    dplyr::select(year, SSB_lag, Recruitment, Mean_SST, Mean_SBT, Mean_SSS, 
+                  phytoplankton = average_food_phyto, small_zooplankton = average_food_small)
+  
+  # Variables to test
+  variables <- c("Mean_SST", "Mean_SBT", "Mean_SSS", "phytoplankton", "small_zooplankton")
+  var_labels <- c("SST", "SBT", "SSS", "Phytoplankton", "Small zooplankton")
+  
+  # Run threshold GAM for each variable
+  for (i in seq_along(variables)) {
+    cat("### Variable:", var_labels[i], "\n")
+    
+    # Capture console output to check for significant results
+    output <- capture.output({
+      tryCatch({
+        run_threshold_gam(autumn_data, "Recruitment", "SSB_lag", variables[i], "year")
+      }, error = function(e) {
+        cat("#### Error:", e$message, "\n")})})
+    
+    # Print the output
+    cat(output, sep = "\n")
+    
+    # Check if LOOCV result is TRUE
+    if (any(grepl("LOOCV result: TRUE", output))) {
+      # Extract Model MR value
+      mr_match <- regmatches(output, regexpr("Model MR: [0-9.]+", output))
+      if (length(mr_match) > 0) {
+        mr_value <- as.numeric(sub("Model MR: ", "", mr_match[1]))
+        significant_thresholds$autumn[[var_labels[i]]] <- mr_value}}}
+  
+  ## Lagged autumn based analysis
+  cat("\n## Lagged autumn based analysis\n")
+  
+  # Merge data for lagged autumn
+  lagged_data <- herring_region_data %>%
+    left_join(cpr_region$phyto %>% filter(Season == "Autumn") %>% mutate(Year = Year + 1), 
+              by = c("year" = "Year")) %>%
+    left_join(cpr_region$small %>% filter(Season == "Autumn") %>% mutate(Year = Year + 1), 
+              by = c("year" = "Year"), suffix = c("_phyto", "_small")) %>%
+    left_join(env_region %>% filter(Season == "Autumn") %>% mutate(year = year + 1), 
+              by = c("year")) %>%
+    dplyr::select(year, SSB_lag, Recruitment, Mean_SST, Mean_SBT, Mean_SSS, 
+                  phytoplankton = average_food_phyto, small_zooplankton = average_food_small)
+  
+  # Run threshold GAM for each variable
+  for (i in seq_along(variables)) {
+    cat("### Variable:", var_labels[i], "\n")
+    
+    # Capture console output to check for significant results
+    output <- capture.output({
+      tryCatch({
+        run_threshold_gam(lagged_data, "Recruitment", "SSB_lag", variables[i], "year")
+      }, error = function(e) {
+        cat("#### Error:", e$message, "\n")})})
+    
+    # Print the output
+    cat(output, sep = "\n")
+    
+    # Check if LOOCV result is TRUE
+    if (any(grepl("LOOCV result: TRUE", output))) {
+      # Extract Model MR value
+      mr_match <- regmatches(output, regexpr("Model MR: [0-9.]+", output))
+      if (length(mr_match) > 0) {
+        mr_value <- as.numeric(sub("Model MR: ", "", mr_match[1]))
+        significant_thresholds$lagged[[var_labels[i]]] <- mr_value}}}
+  
+  ## Year based analysis
+  cat("\n## Year based analysis\n")
+  
+  # Merge data for yearly analysis
+  year_data <- herring_region_data %>%
+    left_join(cpr_region$phyto %>% 
+                group_by(Year) %>% 
+                summarise(phytoplankton = mean(average_food, na.rm = TRUE), .groups = 'drop'), 
+              by = c("year" = "Year")) %>%
+    left_join(cpr_region$small %>% 
+                group_by(Year) %>% 
+                summarise(small_zooplankton = mean(average_food, na.rm = TRUE), .groups = 'drop'), 
+              by = c("year" = "Year")) %>%
+    left_join(env_region %>%
+                group_by(year) %>%
+                summarise(across(starts_with("Mean_"), mean, na.rm = TRUE), .groups = 'drop'),
+              by = "year") %>%
+    dplyr::select(year, SSB_lag, Recruitment, Mean_SST, Mean_SBT, Mean_SSS, 
+                  phytoplankton, small_zooplankton)
+  
+  # Run threshold GAM for each variable
+  for (i in seq_along(variables)) {
+    cat("### Variable:", var_labels[i], "\n")
+    
+    # Capture console output to check for significant results
+    output <- capture.output({
+      tryCatch({
+        run_threshold_gam(year_data, "Recruitment", "SSB_lag", variables[i], "year")
+      }, error = function(e) {
+        cat("#### Error:", e$message, "\n")})})
+    
+    # Print the output
+    cat(output, sep = "\n")
+    
+    # Check if LOOCV result is TRUE
+    if (any(grepl("LOOCV result: TRUE", output))) {
+      # Extract Model MR value
+      mr_match <- regmatches(output, regexpr("Model MR: [0-9.]+", output))
+      if (length(mr_match) > 0) {
+        mr_value <- as.numeric(sub("Model MR: ", "", mr_match[1]))
+        significant_thresholds$year[[var_labels[i]]] <- mr_value}}}
+  
+  # Summary of significant thresholds
+  cat("\n", paste(rep("-", 60), collapse = ""), "\n", sep = "")
+  cat("SUMMARY OF SIGNIFICANT THRESHOLDS (LOOCV = TRUE):\n")
+  cat(paste(rep("-", 60), collapse = ""), "\n", sep = "")
+  
+  significant_found <- FALSE
+  
+  # Check autumn results
+  if (length(significant_thresholds$autumn) > 0) {
+    for (var in names(significant_thresholds$autumn)) {
+      cat(sprintf("- Autumn based: %s (Model MR: %.2f)\n", var, significant_thresholds$autumn[[var]]))
+      significant_found <- TRUE}}
+  
+  # Check lagged results
+  if (length(significant_thresholds$lagged) > 0) {
+    for (var in names(significant_thresholds$lagged)) {
+      cat(sprintf("- Lagged autumn based: %s (Model MR: %.2f)\n", var, significant_thresholds$lagged[[var]]))
+      significant_found <- TRUE}}
+  
+  # Check year results
+  if (length(significant_thresholds$year) > 0) {
+    for (var in names(significant_thresholds$year)) {
+      cat(sprintf("- Year based: %s (Model MR: %.2f)\n", var, significant_thresholds$year[[var]]))
+      significant_found <- TRUE}}
+  
+  if (!significant_found) {
+    cat("No significant thresholds found.\n")}
+  
+  # Return significant thresholds invisibly
+  invisible(significant_thresholds)}
