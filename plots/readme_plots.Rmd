@@ -2,7 +2,8 @@
 title: "readme_plots"
 author: "finn krauss"
 date: "2025-05-24"
-output: html_document
+output: md_document:
+    variant: markdown_github
 ---
 
 ```{r setup, include=FALSE}

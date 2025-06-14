@@ -1,0 +1,33 @@
+The folder R contains all the R code used in this project. The main ides
+for the functionality and approach where taken from the paper [“Regime
+shift dynamics, tipping points and the success of fisheries management”
+by Blöcker et al. 2023](doi.org/10.1038/s41598-022-27104-y) which code
+is available under
+<https://github.com/HeleneGutte/tipping_northsea_fish/tree/main>.
+
+-   **data\_cleanup** contains the R code to import and clean all
+    necessary data from the “data raw” folder. The imported Data is
+    saved to the “data” folder in the .Rdata format. In addition, Plots
+    for a first glance and evaluation of the data are generated and
+    saved to the “plots” folder.
+
+    -   Use: Import raw data, save clean data & generate first plots.
+    -   Variants: \_component the same analysis on the component level
+
+-   **data\_analysis** contains the R code to analyse the data for
+    regimes shifts, it imports its data from “data” and uses functions
+    of the “functions” file.
+
+    -   Use: Import and analyse data for regmie-shifts
+
+-   **functions** contains the definition of various functions to
+    cluttered the main code files.
+
+    -   use: defines functions used in “data\_cleanup” &
+        “data\_analysis”
+
+-   **model\_comp\_functions** contains the functions used to compare
+    and fit different models and return corresponding AIC and RSME.
+
+-   **map\_component** contains the code to compile a bathymetric map of
+    the North Sea including the areas of each component.
