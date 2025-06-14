@@ -129,7 +129,7 @@ plot_hysteresis_full
 ggsave(filename = file.path("plots/", "hysteresis_full.png"),
        plot = plot_hysteresis_full,
        bg = "white",
-       width = 10,
+       width = 15,
        height = 10,
        dpi = 300)
 ```
@@ -195,7 +195,7 @@ plot_SRR_full
 ggsave(filename = file.path("plots/", "SRR_full.png"),
        plot = plot_SRR_full,
        bg = "white",
-       width = 10,
+       width = 15,
        height = 10,
        dpi = 300)
 ```

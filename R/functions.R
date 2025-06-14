@@ -1100,10 +1100,14 @@ breakpoint_analysis <- function(data, ssb_col, f_col, year_col,
 plot_hysteresis <- function(data, break_years, component,
                             msy_btrigger = 1130747, 
                             fmsy = 0.32,
-                            show_msy_btrigger = TRUE,  # New parameter to control MSY B trigger display
-                            show_fmsy = TRUE,           # Optional: also control F_MSY display
-                            colors = c("steelblue", "darkorange", "purple", "lightgreen", "indianred"),
-                            nudge_params = NULL) {      # New parameter for nudge parameters
+                            show_msy_btrigger = TRUE,
+                            show_fmsy = TRUE,
+                            colors = c("steelblue", "darkorange", "purple", "lightgreen", "indianred", "navyblue"),
+                            auto_nudge = TRUE,           # New: automatic intelligent nudging
+                            nudge_force = 1,             # New: control nudging strength
+                            label_box_padding = 0.35,    # New: padding around labels
+                            label_point_padding = 0.5,   # New: padding from points
+                            manual_nudge = NULL) {       # Simplified manual override
   
   msy_btrigger <- as.numeric(msy_btrigger)
   fmsy <- as.numeric(fmsy)
@@ -1111,14 +1115,6 @@ plot_hysteresis <- function(data, break_years, component,
   # Determine number of break years
   n_breaks <- length(break_years)
   n_phases <- n_breaks + 1
-  
-  # Set default nudge parameters if not provided
-  if (is.null(nudge_params)) {
-    nudge_params <- list(
-      list(nudge_y = 0, nudge_x = 0.2),
-      list(nudge_y = -0.5, nudge_x = 0.2),
-      list(nudge_y = 0, nudge_x = -0.2),
-      list(nudge_y = 0, nudge_x = 0.2))}
   
   # Create phase assignment vector
   phase_assignment <- rep(1, nrow(data))
@@ -1132,14 +1128,17 @@ plot_hysteresis <- function(data, break_years, component,
   phase_data_list <- list()
   for (i in 1:n_phases) {
     if (i == 1) {
-      # First phase: up to first break year
       phase_data_list[[i]] <- data %>% filter(year <= break_years[1])
     } else if (i == n_phases) {
-      # Last phase: after last break year
       phase_data_list[[i]] <- data %>% filter(year > break_years[n_breaks])
     } else {
-      # Middle phases: between break years
       phase_data_list[[i]] <- data %>% filter(year > break_years[i-1] & year <= break_years[i])}}
+  
+  # Calculate data ranges for intelligent nudging
+  f_range <- range(data$F, na.rm = TRUE)
+  ssb_range <- range(data$SSB_lag/1000000, na.rm = TRUE)
+  f_span <- diff(f_range)
+  ssb_span <- diff(ssb_range)
   
   # Create the base plot
   p <- ggplot(data = data, aes(x = F, y = SSB_lag/1000000)) +
@@ -1149,47 +1148,110 @@ plot_hysteresis <- function(data, break_years, component,
     theme_minimal() +
     theme(plot.title = element_text(hjust = 0.5))
   
-  # Add MSY B trigger line and label only if show_msy_btrigger is TRUE
+  # Add MSY B trigger line and label
   if (show_msy_btrigger) {
     p <- p + 
       geom_hline(yintercept = msy_btrigger/1000000, linetype = "dashed", color = "gray30") +
-      geom_label(x = 1, y = msy_btrigger/1000000, label = expression("MSY B"[trigger]), 
-                 color = "gray30", size = 3.5, fontface = "bold")}
+      annotate("text", x = f_range[1] + f_span * 0.02, y = msy_btrigger/1000000, 
+               label = expression("MSY B"[trigger]), color = "gray30", size = 3.5, 
+               fontface = "bold", hjust = 0, vjust = -0.5)}
   
-  # Add F_MSY line and label only if show_fmsy is TRUE
+  # Add F_MSY line and label
   if (show_fmsy) {
     p <- p + 
       geom_vline(xintercept = fmsy, linetype = "dashed", color = "gray30") +
-      geom_label(x = fmsy, y = 0.5, label = expression("F"[MSY]), 
-                 color = "gray30", size = 3.5)}
+      annotate("text", x = fmsy, y = ssb_range[1] + ssb_span * 0.02, 
+               label = expression("F"[MSY]), color = "gray30", size = 3.5,
+               hjust = -0.2, vjust = 0)}
   
-  # Add geom_smooth for each phase (only if data exists)
+  # Add geom_smooth for each phase
   for (i in 1:n_phases) {
     if (nrow(phase_data_list[[i]]) > 0) {
       p <- p + geom_smooth(data = phase_data_list[[i]], aes(x = F, y = SSB_lag/1000000),
                            method = "lm", colour = colors[i])}}
   
-  # Add text labels for break years (only for existing break years)
+  # Prepare data for labeling
+  label_data <- data.frame()
+  
+  # Add break years
   for (i in 1:n_breaks) {
     break_year_data <- data %>% filter(year == break_years[i])
     if (nrow(break_year_data) > 0) {
-      nudge_y <- if (i <= length(nudge_params)) nudge_params[[i]]$nudge_y else 0
-      nudge_x <- if (i <= length(nudge_params)) nudge_params[[i]]$nudge_x else 0
+      label_data <- rbind(label_data, break_year_data)}}
+  
+  # Add first and last years
+  first_last_data <- data[c(1, nrow(data)), ]
+  label_data <- rbind(label_data, first_last_data)
+  
+  # Remove duplicates (in case break years include first/last years)
+  label_data <- label_data[!duplicated(label_data$year), ]
+  
+  # Apply nudging strategy
+  if (auto_nudge && is.null(manual_nudge)) {
+    # Intelligent automatic nudging
+    p <- p + geom_text_repel(
+      data = label_data, 
+      aes(label = year),
+      box.padding = label_box_padding,
+      point.padding = label_point_padding,
+      force = nudge_force,
+      force_pull = nudge_force * 0.5,
+      max.overlaps = Inf,
+      min.segment.length = 0,
+      segment.size = 0.3,
+      segment.alpha = 0.6,
+      size = 3.2,
+      fontface = "italic",
+      color = "black",
+      direction = "both",
+      seed = 42)
+    
+  } else if (!is.null(manual_nudge)) {
+    # Manual nudging with simplified interface
+    # manual_nudge should be a named list: list("2010" = c(x_nudge, y_nudge), ...)
+    
+    for (i in 1:nrow(label_data)) {
+      year_str <- as.character(label_data$year[i])
       
-      p <- p + geom_text_repel(data = break_year_data, aes(label = year),
-                               point.padding = 0.2, nudge_y = nudge_y, nudge_x = nudge_x,
-                               size = 3, col = "black", segment.size = 0.2)}}
-  
-  # Add labels for first and last years
-  # Use the last element of nudge_params for start/end years, or default values
-  end_nudge_y <- if (length(nudge_params) >= 5) nudge_params[[5]]$nudge_y else 0
-  end_nudge_x <- if (length(nudge_params) >= 5) nudge_params[[5]]$nudge_x else -0.1
-  
-  p <- p + geom_text_repel(data = data[c(1, length(data$year)),], aes(label = year),
-                           point.padding = 0.2, nudge_y = end_nudge_y, nudge_x = end_nudge_x,
-                           size = 3, col = "black", segment.size = 0.2)
+      if (year_str %in% names(manual_nudge)) {
+        nudge_x <- manual_nudge[[year_str]][1] * f_span * 0.1
+        nudge_y <- manual_nudge[[year_str]][2] * ssb_span * 0.1
+      } else {
+        nudge_x <- 0
+        nudge_y <- 0}
+      
+      p <- p + geom_text_repel(
+        data = label_data[i, ], 
+        aes(label = year),
+        nudge_x = nudge_x,
+        nudge_y = nudge_y,
+        box.padding = label_box_padding,
+        point.padding = label_point_padding,
+        size = 3.2,
+        fontface = "bold",
+        color = "black",
+        segment.size = 0.3,
+        segment.alpha = 0.6)}
+    
+  } else {
+    # Simple fallback with minimal nudging
+    p <- p + geom_text_repel(
+      data = label_data, 
+      aes(label = year),
+      box.padding = 0.5,
+      point.padding = 0.3,
+      size = 3,
+      color = "black",
+      segment.size = 0.2)}
   
   return(p)}
+
+# Helper function to create manual nudge parameters easily
+create_nudge_params <- function(...) {
+  # Usage: create_nudge_params("2010" = c(1, -1), "2015" = c(-1, 1))
+  # Values are relative: positive x = right, negative x = left
+  #                     positive y = up, negative y = down
+  list(...)}
 
 
 #--------------------------------------------------------------------------------------
