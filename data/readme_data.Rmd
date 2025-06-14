@@ -29,3 +29,6 @@ The "data" folder contains the .Rdata files used for analysis. The files are pro
 -   **Herring_full** contains the SSB, F and R time-series for the full stock as well as a coefficient variance and lower and upper bounds for SSB. The F and R values are take from the recent ICES Advise
     -   Type: tibble
     -   Variables: year, SSB [t], cv, l_bnd [t], u_bnd [t], F, R [thousands]
+-   **CPR** contains data from the continuous plankton recorder. It was requested based on the ICES areas of the NSAS Herring and to contain target prey species (Phyto- and Zooplankton). It is separated into Phyto- and small Zooplankton and spatially filtered by component
+    -   Type: tibble
+    -   Variables: region, Year, Season, total_food, average_food, sample_count

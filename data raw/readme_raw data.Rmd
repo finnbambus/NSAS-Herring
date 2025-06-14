@@ -12,19 +12,17 @@ The data raw Folder includes all data as it was received from its various source
 
 ### Environmental Data
 
--   **Global SST Monthly Mean.nc** was fetched from the NOAA Physical Sciences Laboratory. It contains SST data interpolated with the Optimal Interpolation (OI) model.
+-   **NS CPR** contains abundance data from the continuous plankton recorder project. It was requested at the Marine Biological Association and made available by Pierre Helaouet.
 
-    -   Type: Sea Surface Temperature (SST), daily data condensed to monthly average
+    -   Type: Plankton abundance
 
-    -   Coverage: Global
+    -   Coverage: ICES Areas (4.a, 4.b, 4.c, 7.d)
 
-    -   Time Range: 09.1981 to 05.2025
+    -   Time Range: 1958 to 2021
 
-    -   Resolution: 0.25° x 0.25°
+    -   Resolution: Individual data points (not interpolated)
 
-    -   Link: <https://psl.noaa.gov/data/gridded/data.noaa.oisst.v2.highres.html>
-
-    -   As for the large file size (2 gb) this file is not pushed to the GitHub repository.
+    -   DOI: <https://doi.org/10.17031/6847e7193af55>
 
 -   **NS SST Monthly.nc** was fetched from the Copernicus Marine MyOcean platform. It contains SST data of the North Sea interpolated with the NEMO model.
 
