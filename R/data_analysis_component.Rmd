@@ -323,12 +323,6 @@ ggsave(filename = file.path("plots/", "hysteresis_components.png"),
 ### Load model comparison from model_comp_functions.R 
 source("R/model_comp_functions.R")
 
-# Create lagged SSB for all regions
-Herring$SHOR$SSB_R_0 <- lag(Herring$SHOR$SSB_component, 1)
-Herring$Buchan$SSB_R_0 <- lag(Herring$Buchan$SSB_component, 1)
-Herring$Banks$SSB_R_0 <- lag(Herring$Banks$SSB_component, 1)
-Herring$Downs$SSB_R_0 <- lag(Herring$Downs$SSB_component, 1)
-
 ### Shetland Orkney
 #### Compare different models
 models_SRR <- list()
@@ -336,7 +330,7 @@ models_SRR <- list()
 models_SRR$SHOR <- run_srr_analysis(
   data_for_srr = Herring$SHOR,
   recruit_col = "Recruitment",
-  ssb_col = "SSB_R_0",
+  ssb_col = "SSB_component",
   max_breaks = 5,
   use_bic = TRUE)
 
@@ -344,31 +338,33 @@ print(models_SRR$SHOR$comparison_table)
 
 ##### strucchange model shows lowest RMSE and high R_sqrt
 
-#### Call function "srr_breakpoint_analysis" to extract SSR breakpoints
-results_SRR <- list()
-
-results_SRR$SHOR <- srr_breakpoint_analysis(Herring$SHOR, "SSB_R_0", "Recruitment", "year", "Shetland Orkney")
-
-# Optimal number of breaks: 3 
-# Best breakpoint SSB values:
-# 138883, 473458.6, 997291.1   
-# Best breakpoint years:
-# 1980,   1987,     1998
-
-#### Prep data for LOOCV function
+### Prep data for LOOCV function
 dat_SHOR <- Herring$SHOR %>%
   mutate(R_log = log(Recruitment),
-         SSB_log = log(SSB_R_0)) %>%
-  dplyr::select(year, Recruitment, SSB_R_0, R_log, SSB_log) %>%
+         SSB_log = log(SSB_component)) %>%
+  dplyr::select(year, Recruitment, SSB_component, R_log, SSB_log) %>%
   na.omit() %>%
   setNames(c("Year", "R", "SSB", "R_log", "SSB_log")) %>%
   as.data.frame()
 
-#### Call function "cross_valid" for performing loocv for all models
+### Call function "cross_valid" for performing loocv for all models
 rmse_mean_SHOR <- cross_valid(dataset = dat_SHOR)
 #         linear    beverton    ricker      segmented   seg.log     segm.glm    strucchange
-# TEST:   11772136  11343750    11871360    11786448    11384994    11809699    15199393
-# TRAIN:  13765706  14442875    14869506    13238463    14020516    13324445    7352534
+# TEST:   6032494   5917938     5996407     5906258     5705905     5919392     10051737
+# TRAIN:  7193145   7998380     7896592     6659682     6947653     6985389     3945464
+
+#### strucchange show best performance for training data, segmented show balanced results.
+#### Classic non segmented models show generally bad performance.
+
+### Call function "srr_breakpoint_analysis" to extract SSR breakpoints
+results_SRR <- list()
+results_SRR$SHOR <- srr_breakpoint_analysis(Herring$SHOR, "SSB_component", "Recruitment", "year", "Shetland Orkney")
+
+# Optimal number of breaks: 3 
+# Best breakpoint SSB values:
+# 148853.8, 505309.4, 1201916.7 
+# Best breakpoint years:
+# 1980, 1987, 2001 
 
 #---------------------------------------------------------------------
 
@@ -377,28 +373,19 @@ rmse_mean_SHOR <- cross_valid(dataset = dat_SHOR)
 models_SRR$Buchan <- run_srr_analysis(
   data_for_srr = Herring$Buchan,
   recruit_col = "Recruitment",
-  ssb_col = "SSB_R_0",
+  ssb_col = "SSB_component",
   max_breaks = 5,
   use_bic = TRUE)
 
 print(models_SRR$Buchan$comparison_table)
 
-##### strucchange model shows lowest RMSE and high R_sqrt
-
-#### Call function "srr_breakpoint_analysis" to extract SSR breakpoints
-results_SRR$Buchan <- srr_breakpoint_analysis(Herring$Buchan, "SSB_R_0", "Recruitment", "year", "Buchan")
-
-# Optimal number of breaks: 4
-# Best breakpoint SSB values:
-# 1345.8, 195896.8, 55615.1,  291660  
-# Best breakpoint years:
-# 1980,   1987,     1998,     2005 
+##### segmented shows best RSME with good R_sqrt
 
 #### Prep data for LOOCV function
 dat_Buchan <- Herring$Buchan %>%
   mutate(R_log = log(Recruitment),
-         SSB_log = log(SSB_R_0)) %>%
-  dplyr::select(year, Recruitment, SSB_R_0, R_log, SSB_log) %>%
+         SSB_log = log(SSB_component)) %>%
+  dplyr::select(year, Recruitment, SSB_component, R_log, SSB_log) %>%
   na.omit() %>%
   setNames(c("Year", "R", "SSB", "R_log", "SSB_log")) %>%
   as.data.frame()
@@ -406,9 +393,20 @@ dat_Buchan <- Herring$Buchan %>%
 #### Call function "cross_valid" for performing loocv for all models
 rmse_mean_Buchan <- cross_valid(dataset = dat_Buchan)
 
-#         linear    beverton    ricker      segmented   seg.log     segm.glm    strucchange
-# TEST:   12015235  10595458    19134487    10973461    10558432    10902830    12834049
-# TRAIN:  14050966  13221773    22728217    12059858    12674254    11969251    6428646
+#         linear    beverton    ricker    segmented   seg.log     segm.glm    strucchange
+# TEST:   3896841   3509676     3594420   3800680     3380904     4106180     8088465
+# TRAIN:  5799156   6165425     6142350   5736075     6092542     5932873     2064443
+
+#### segmented show good balance and best test values, strucchanege shows strong overfitting
+
+#### Call function "srr_breakpoint_analysis" to extract SSR breakpoints
+results_SRR$Buchan <- srr_breakpoint_analysis(Herring$Buchan, "SSB_component", "Recruitment", "year", "Buchan", method = "segmented")
+
+# Running segmented model analysis
+# Using mean SSB as initial psi: 309942.8 
+# Segmented model breakpoint:
+# SSB breakpoint: 98449.3 ± 181693.3 
+# Approximate year: 1982 
 
 #---------------------------------------------------------------------
 
@@ -417,7 +415,7 @@ rmse_mean_Buchan <- cross_valid(dataset = dat_Buchan)
 models_SRR$Banks <- run_srr_analysis(
   data_for_srr = Herring$Banks,
   recruit_col = "Recruitment",
-  ssb_col = "SSB_R_0",
+  ssb_col = "SSB_component",
   max_breaks = 5,
   use_bic = TRUE)
 
@@ -425,20 +423,11 @@ print(models_SRR$Banks$comparison_table)
 
 ##### strucchange model shows lowest RMSE and high R_sqrt
 
-#### Call function "srr_breakpoint_analysis" to extract SSR breakpoints
-results_SRR$Banks <- srr_breakpoint_analysis(Herring$Banks, "SSB_R_0", "Recruitment", "year", "Banks")
-
-# Optimal number of breaks: 2 
-# Best breakpoint SSB values:
-# 31973.7,  290323.2
-# Best breakpoint years:
-# 1980,     1987 
-
 #### Prep data for LOOCV function
 dat_Banks <- Herring$Banks %>%
   mutate(R_log = log(Recruitment),
-         SSB_log = log(SSB_R_0)) %>%
-  dplyr::select(year, Recruitment, SSB_R_0, R_log, SSB_log) %>%
+         SSB_log = log(SSB_component)) %>%
+  dplyr::select(year, Recruitment, SSB_component, R_log, SSB_log) %>%
   na.omit() %>%
   setNames(c("Year", "R", "SSB", "R_log", "SSB_log")) %>%
   as.data.frame()
@@ -446,9 +435,20 @@ dat_Banks <- Herring$Banks %>%
 #### Call function "cross_valid" for performing loocv for all models
 rmse_mean_Banks <- cross_valid(dataset = dat_Banks)
 
-#         linear    beverton    ricker      segmented   seg.log     segm.glm    strucchange
-# TEST:   11841178  12045107    11116010    10938119    11898504    10543767    18859413
-# TRAIN:  14238800  15048377    13986813    12772565    13612084    12865143    6756239
+#         linear    beverton    ricker    segmented   seg.log     segm.glm    strucchange
+# TEST:   2298870   1970034     1954005   2399083     2038932     2370782     4248983
+# TRAIN:  3211518   3180706     3133516   2988736     3112284     3020506     1154869
+
+#### Non segmented models only show onpar test performance with segmented. strucchange overfitting again, segmented outperform for train.
+
+#### Call function "srr_breakpoint_analysis" to extract SSR breakpoints
+results_SRR$Banks <- srr_breakpoint_analysis(Herring$Banks, "SSB_component", "Recruitment", "year", "Banks")
+
+# Optimal number of breaks: 3 
+# Best breakpoint SSB values:
+# 38326.5, 307682.7, 303694 
+# Best breakpoint years:
+# 1980, 1987, 2001 
 
 #---------------------------------------------------------------------
 
@@ -457,7 +457,7 @@ rmse_mean_Banks <- cross_valid(dataset = dat_Banks)
 models_SRR$Downs <- run_srr_analysis(
   data_for_srr = Herring$Downs,
   recruit_col = "Recruitment",
-  ssb_col = "SSB_R_0",
+  ssb_col = "SSB_component",
   max_breaks = 5,
   use_bic = TRUE)
 
@@ -465,20 +465,11 @@ print(models_SRR$Downs$comparison_table)
 
 ##### segmented regression model shows lowest RMSE and high R_sqrt
 
-#### Call function "srr_breakpoint_analysis" to extract SSR breakpoints
-results_SRR$Downs <- srr_breakpoint_analysis(Herring$Downs, "SSB_R_0", "Recruitment", "year", "Downs", method = "segmented")
-
-# Running segmented model analysis
-# Using mean SSB as initial psi: 305881.4 
-# Segmented model breakpoint:
-# SSB breakpoint:   25587.2 ± 3723 
-# Approximate year: 1982
-
 #### Prep data for LOOCV function
 dat_Downs <- Herring$Downs %>%
   mutate(R_log = log(Recruitment),
-         SSB_log = log(SSB_R_0)) %>%
-  dplyr::select(year, Recruitment, SSB_R_0, R_log, SSB_log) %>%
+         SSB_log = log(SSB_component)) %>%
+  dplyr::select(year, Recruitment, SSB_component, R_log, SSB_log) %>%
   na.omit() %>%
   setNames(c("Year", "R", "SSB", "R_log", "SSB_log")) %>%
   as.data.frame()
@@ -488,7 +479,18 @@ rmse_mean_Downs <- cross_valid(dataset = dat_Downs)
 
 #         linear    beverton    ricker      segmented   seg.log     segm.glm    strucchange
 # TEST:   10947162  9919600     15101560    6227837     5940221     5632788     7576975
-# TRAIN:  13911799  12588122    20366748    7910480     7971852     7639690     7012595
+# TRAIN:  1784159   1771427     1936651     1619286     1688248     1611886     1237352
+
+#### segmented outperform classical models for train data
+
+#### Call function "srr_breakpoint_analysis" to extract SSR breakpoints
+results_SRR$Downs <- srr_breakpoint_analysis(Herring$Downs, "SSB_component", "Recruitment", "year", "Downs", method = "segmented")
+
+# Running segmented model analysis
+# Using mean SSB as initial psi: 305881.4 
+# Segmented model breakpoint:
+# SSB breakpoint:   25587.2 ± 3723 
+# Approximate year: 1982
 ```
 
 ## Plotting
@@ -500,7 +502,7 @@ plots_SRR <- list()
 plots_SRR$SHOR <- plot_SRR(Herring$SHOR, break_years = results_SRR$SHOR$break_years,
                           title_stock = "Shetland Orkney", 
                           used_model = "strucchange", 
-                          ssb_col = "SSB_R_0",
+                          ssb_col = "SSB_component",
                           show_Blim = FALSE,
                           nudge_params = list(
                             list(nudge_y = -8, nudge_x = 0.1),    # first year
@@ -512,10 +514,10 @@ plots_SRR$SHOR
 #---------------------------------------------------------------------
 
 ### Buchan
-plots_SRR$Buchan <- plot_SRR(Herring$Buchan, break_years = results_SRR$Buchan$break_years,
+plots_SRR$Buchan <- plot_SRR(Herring$Buchan, break_years = results_SRR$Buchan$breakpoint_year,
                           title_stock = "Buchan", 
                           used_model = "strucchange", 
-                          ssb_col = "SSB_R_0",
+                          ssb_col = "SSB_component",
                           show_Blim = FALSE,
                           nudge_params = list(
                             list(nudge_y = -8, nudge_x = 0.1),    # first year
@@ -530,7 +532,7 @@ plots_SRR$Buchan
 plots_SRR$Banks <- plot_SRR(Herring$Banks, break_years = results_SRR$Banks$break_years,
                           title_stock = "Banks", 
                           used_model = "strucchange", 
-                          ssb_col = "SSB_R_0",
+                          ssb_col = "SSB_component",
                           show_Blim = FALSE,
                           nudge_params = list(
                             list(nudge_y = -8, nudge_x = 0.1),    # first year
@@ -545,7 +547,7 @@ plots_SRR$Banks
 plots_SRR$Downs <- plot_SRR(Herring$Downs, break_years = results_SRR$Downs$breakpoint_year,
                           title_stock = "Downs", 
                           used_model = "segmented", 
-                          ssb_col = "SSB_R_0",
+                          ssb_col = "SSB_component",
                           show_Blim = FALSE,
                           nudge_params = list(
                             list(nudge_y = -8, nudge_x = 0.1),    # first year

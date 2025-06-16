@@ -79,9 +79,11 @@ Herring_LAI <- Herring_full %>%
   left_join(LAI_component, by = "year") %>%
   mutate(SSB_component = SSB * (LAI_perc. / 100),
          l_bnd_component = l_bnd * (LAI_perc. / 100),
-         u_bnd_component = u_bnd * (LAI_perc. / 100)) %>%
+         u_bnd_component = u_bnd * (LAI_perc. / 100),
+         Recruitment = as.integer(Recruitment * (LAI_perc. / 100))) %>%
   dplyr::select(year, component, LAI_perc., SSB_component, l_bnd_component, u_bnd_component, F, Recruitment) %>%
   drop_na()
+
 ```
 
 ## Environmental data import

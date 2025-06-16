@@ -142,35 +142,24 @@ ggsave(filename = file.path("plots/", "hysteresis_full.png"),
 ### Run model comparison from model_comp_functions.R 
 source("R/model_comp_functions.R")
 
-Herring_full$SSB_R_0 <- lag(Herring_full$SSB)
-
 models_SRR <- run_srr_analysis(
   data_for_srr = Herring_full,
   recruit_col = "Recruitment", 
-  ssb_col = "SSB_R_0",
+  ssb_col = "SSB",
   max_breaks = 4,
   use_bic = TRUE)
 
 models_SRR[["comparison_table"]]
 
 #### Bad overdispertion for GLM's exept nebinom
-#### strucchange model shows lowest RMSE, seg.log best R_squared
-
-### Call function "srr_breakpoint_analysis"
-results_SRR <- srr_breakpoint_analysis(Herring_full, "SSB_R_0", "Recruitment", "year", "Herring Full", method = "segmented")
-
-# Running segmented model analysis
-# Using mean SSB as initial psi: 1537513 
-# Segmented model breakpoint:
-# SSB breakpoint: 579189.1 ± 118213.4 
-# Approximate year: 1983
-
+#### While seg.log shows best r_sqrt it has horible RSME
+#### strucchange model shows lowest RMSE, with second best R_sqrt
 
 ### Prep data for LOOCV function
 dat <- Herring_full %>%
   mutate(R_log = log(Recruitment),
-         SSB_log = log(SSB_R_0)) %>%
-  dplyr::select(year, Recruitment, SSB_R_0, R_log, SSB_log) %>%
+         SSB_log = log(SSB)) %>%
+  dplyr::select(year, Recruitment, SSB, R_log, SSB_log) %>%
   na.omit() %>%
   setNames(c("Year", "R", "SSB", "R_log", "SSB_log")) %>%
   as.data.frame()
@@ -178,14 +167,26 @@ dat <- Herring_full %>%
 ### Call function "cross_valid" for performing loocv for all models
 rmse_mean_herring <- cross_valid(dataset = dat)
 #         linear    beverton    ricker      segmented   seg.log     segm.glm    strucchange
-# TEST:   10531809  9470958     10405259    10132788    9472566     9995543     12574082
-# TRAIN:  12825237  12602711    12789354    11575402    11676284    11713807    9380455
+# TEST:   10164856  9080981     10040655    9437569     9475234     9394538     12472272
+# TRAIN:  12568771  12158586    12366932    11012203    11184582    11014417    8777879
+
+#### strucchange shows bad prediction performance for but great fit to historical data, segmented models show best balance.
+#### Classical non segmented models show general bad performance (except beverton-holts good prediction performance).
+
+### Call function "srr_breakpoint_analysis"
+results_SRR <- srr_breakpoint_analysis(Herring_full, "SSB", "Recruitment", "year", "Herring Full", method ="segmented")
+
+# Running segmented model analysis
+# Using mean SSB as initial psi: 1647949 
+# Segmented model breakpoint:
+# SSB breakpoint: 553296.5 ± 108381.8 
+# Approximate year: 1983 
 ```
 
 ## Plotting
 
 ```{r}
-plot_SRR_full <- plot_SRR(Herring_full, break_years = results_SRR$breakpoint_year, "Full Stock", "segmented-log")
+plot_SRR_full <- plot_SRR(Herring_full, break_years = results_SRR$breakpoint_year, "Full Stock", "segmented")
 plot_SRR_full
 ```
 
