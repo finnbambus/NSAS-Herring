@@ -1411,6 +1411,92 @@ srr_breakpoint_analysis <- function(data, ssb_col = "SSB", r_col = "Recruitment"
 
 
 #--------------------------------------------------------------------------------------
+## Plot SRR Residuals
+#--------------------------------------------------------------------------------------
+
+plot_herring_summary <- function(srr_data, ssb_col, recruit_col, year_col, f_col) {
+  
+  # --- Step 1: VALIDATE COLUMN NAMES ---
+  required_cols <- c(ssb_col, recruit_col, year_col, f_col)
+  missing_cols <- required_cols[!required_cols %in% names(srr_data)]
+  
+  if (length(missing_cols) > 0) {
+    stop(paste("ERROR: The following required column(s) were not found:",
+               paste(missing_cols, collapse = ", ")))}
+  
+  # --- Step 2: Calculate SRR log residuals ---
+  residual_data <- dplyr::select(srr_data,
+                                 Year = dplyr::all_of(year_col),
+                                 SSB = dplyr::all_of(ssb_col),
+                                 R = dplyr::all_of(recruit_col)) %>%
+    stats::na.omit() %>%
+    dplyr::mutate(
+      SSB_log = log(SSB),
+      R_log = log(R))
+  
+  if(nrow(residual_data) == 0) {
+    stop("ERROR: No complete rows left after removing NAs from SSB and Recruitment columns.")}
+  
+  linear_model_log <- stats::lm(R_log ~ SSB_log, data = residual_data)
+  segmented_model_log <- segmented::segmented(linear_model_log, seg.Z = ~SSB_log, psi = mean(residual_data$SSB_log, na.rm=TRUE))
+  residual_data$log_residuals <- stats::residuals(segmented_model_log)
+  
+  # --- Step 3: Prepare the final dataframe for plotting ---
+  # THIS SECTION IS NOW CORRECTED
+  plot_data <- dplyr::select(srr_data,
+                             Year = dplyr::all_of(year_col),
+                             SSB = dplyr::all_of(ssb_col),
+                             Recruitment = dplyr::all_of(recruit_col),
+                             F_2_6 = dplyr::all_of(f_col)) %>%
+    # First select the columns, THEN perform calculations with mutate()
+    dplyr::mutate(
+      SSB = SSB / 1000000,
+      Recruitment = Recruitment / 1000000
+    ) %>%
+    dplyr::left_join(dplyr::select(residual_data, Year, log_residuals), by = "Year") %>%
+    dplyr::mutate(
+      residual_color = ifelse(log_residuals < 0, "negative", "positive"))
+  
+  # --- Step 4: Create each individual panel with your new aesthetics ---
+  theme_stacked <- ggplot2::theme_classic() +
+    ggplot2::theme(axis.title.x = ggplot2::element_blank(), axis.text.x = ggplot2::element_blank(),
+                   axis.ticks.x = ggplot2::element_blank(), plot.margin = ggplot2::margin(t = 5, r = 5, b = 0, l = 5))
+  
+  # Panel (a): SSB - with navyblue points
+  p_ssb <- ggplot2::ggplot(plot_data, ggplot2::aes(x = Year, y = SSB)) +
+    ggplot2::geom_line(color = "black") +
+    ggplot2::geom_point(shape = 21, fill = "navyblue", color = "white", size = 2) +
+    ggplot2::labs(y = "SSB (million t)") + theme_stacked
+  
+  # Panel (b): Recruits - with darkgrey fill and no outline
+  p_recruits <- ggplot2::ggplot(plot_data, ggplot2::aes(x = Year, y = Recruitment)) +
+    ggplot2::geom_col(fill = "grey25", color = NA, width = 0.8) +
+    ggplot2::labs(y = "Recruits (billion)") + theme_stacked
+  
+  # Panel (c): Fishing Mortality - with navyblue points
+  p_f <- ggplot2::ggplot(plot_data, ggplot2::aes(x = Year, y = F_2_6)) +
+    ggplot2::geom_line(color = "black") +
+    ggplot2::geom_point(shape = 21, fill = "navyblue", color = "white", size = 2) +
+    ggplot2::labs(y = "Fishing mortality") + theme_stacked
+  
+  # Panel (d): SRR log residuals - with conditional color and no outline
+  p_residuals <- ggplot2::ggplot(plot_data, ggplot2::aes(x = Year, y = log_residuals)) +
+    ggplot2::geom_col(ggplot2::aes(fill = residual_color), color = NA, width = 0.8) +
+    ggplot2::scale_fill_manual(values = c("negative" = "navyblue", "positive" = "grey25"), guide = "none", na.value="grey80") +
+    ggplot2::geom_hline(yintercept = 0, color = "black") +
+    ggplot2::labs(y = "SRR log residuals", x = "Year") +
+    ggplot2::theme_classic() + ggplot2::theme(plot.margin = ggplot2::margin(t = 5, r = 5, b = 5, l = 5))
+  
+  # --- Step 5: Combine the plots with explicit patchwork:: calls ---
+  combined_plot <- patchwork::wrap_plots(p_ssb, p_recruits, p_f, p_residuals, ncol = 1)
+  
+  final_plot <- combined_plot + patchwork::plot_annotation(tag_levels = 'a', tag_suffix = ')') &
+    ggplot2::theme(plot.tag = ggplot2::element_text(face = 'bold'))
+  
+  print(final_plot)}
+
+
+#--------------------------------------------------------------------------------------
 ## Plot SRR
 #--------------------------------------------------------------------------------------
 

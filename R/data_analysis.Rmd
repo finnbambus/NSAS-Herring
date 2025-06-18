@@ -181,6 +181,13 @@ results_SRR <- srr_breakpoint_analysis(Herring_full, "SSB", "Recruitment", "year
 # Segmented model breakpoint:
 # SSB breakpoint: 553296.5 ± 108381.8 
 # Approximate year: 1983 
+
+plot_overview <- plot_herring_summary(
+  srr_data = Herring_full,
+  ssb_col = "SSB",
+  recruit_col = "Recruitment",
+  year_col = "year",
+  f_col = "F")
 ```
 
 ## Plotting
@@ -198,6 +205,13 @@ ggsave(filename = file.path("plots/", "SRR_full.png"),
        bg = "white",
        width = 15,
        height = 10,
+       dpi = 300)
+
+ggsave(filename = file.path("plots/", "overview.png"),
+       plot(plot_overview),
+       bg = "white",
+       width = 10,
+       height = 20,
        dpi = 300)
 ```
 
