@@ -24,6 +24,9 @@ library(grid)
 ```
 
 ```{r}
+# Load shapefile
+marine_components <- st_read("data raw/components_shp/components.shp", quiet = TRUE)
+
 # Ensure WGS84 projection
 marine_components <- st_transform(marine_components, crs = 4326)
 
