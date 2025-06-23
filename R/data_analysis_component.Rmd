@@ -210,12 +210,6 @@ ggsave(filename = file.path("plots/", "SSB_cpt_components.png"),
 ## Analysis
 
 ```{r}
- # Create time-lag object using specified lag
-  data$SSB_lag <- lag(data[[ssb_col]], lag_years)
-  
-  if (!is.null(dataset_name)) {
-    assign(dataset_name, data, envir = parent.frame())}
-
 ### Examine for time lag
 ccf(Herring$SHOR$SSB_component, Herring$SHOR$F, type = "correlation") # 1 year lag
 Herring$SHOR$SSB_lag <- lag(Herring$SHOR$SSB_component, 1)
@@ -335,8 +329,20 @@ models_SRR$SHOR <- run_srr_analysis(
   use_bic = TRUE)
 
 print(models_SRR$SHOR$comparison_table)
+#               Model          AIC     RMSE R_squared
+#        independence 1.795652e+03  7197567 0.3897771
+#       beverton_holt 1.138750e+02  8004318 0.3220916
+#              ricker 1.152775e+02  7902179 0.3149778
+#   segmented_regular 1.791667e+03  6665647 0.4766386
+#       segmented_log 1.124631e+02 14069690 0.4168969
+#  segmented_negbinom 1.758980e+03  6990494        NA
+#         strucchange 1.743655e+03  3889912 0.8217635
+#        glm_gaussian 1.795652e+03  7197567        NA
+#         glm_poisson 2.137039e+08  6957747        NA
+#    glm_quasipoisson           NA  6957747        NA
+#        glm_negbinom 1.763447e+03  6955796        NA
 
-##### strucchange model shows lowest RMSE and high R_sqrt
+##### strucchange lowest RMSE.
 
 ### Prep data for LOOCV function
 dat_SHOR <- Herring$SHOR %>%
@@ -353,8 +359,7 @@ rmse_mean_SHOR <- cross_valid(dataset = dat_SHOR)
 # TEST:   6032494   5917938     5996407     5906258     5705905     5919392     10051737
 # TRAIN:  7193145   7998380     7896592     6659682     6947653     6985389     3945464
 
-#### strucchange show best performance for training data, segmented show balanced results.
-#### Classic non segmented models show generally bad performance.
+#### strucchange validated by loocv.
 
 ### Call function "srr_breakpoint_analysis" to extract SSR breakpoints
 results_SRR <- list()
@@ -378,8 +383,20 @@ models_SRR$Buchan <- run_srr_analysis(
   use_bic = TRUE)
 
 print(models_SRR$Buchan$comparison_table)
+#               Model          AIC    RMSE R_squared
+#        independence 1.773301e+03 5805618 0.3996297
+#       beverton_holt 1.067257e+02 6173465 0.3797114
+#              ricker 1.089596e+02 6148872 0.3643869
+#   segmented_regular 1.776181e+03 5743466 0.4124155
+#       segmented_log 1.083281e+02 9688514 0.8613104
+#  segmented_negbinom 1.671189e+03 6048104        NA
+#         strucchange 1.678348e+03 2075984 0.9232338
+#        glm_gaussian 1.773301e+03 5805618        NA
+#         glm_poisson 2.118232e+08 6211740        NA
+#    glm_quasipoisson           NA 6211740        NA
+#        glm_negbinom 1.704921e+03 9416817        NA
 
-##### segmented shows best RSME with good R_sqrt
+##### strucchange lowest RSME.
 
 #### Prep data for LOOCV function
 dat_Buchan <- Herring$Buchan %>%
@@ -397,16 +414,16 @@ rmse_mean_Buchan <- cross_valid(dataset = dat_Buchan)
 # TEST:   3896841   3509676     3594420   3800680     3380904     4106180     8088465
 # TRAIN:  5799156   6165425     6142350   5736075     6092542     5932873     2064443
 
-#### segmented show good balance and best test values, strucchanege shows strong overfitting
+#### strucchange validated by loocv.
 
 #### Call function "srr_breakpoint_analysis" to extract SSR breakpoints
-results_SRR$Buchan <- srr_breakpoint_analysis(Herring$Buchan, "SSB_component", "Recruitment", "year", "Buchan", method = "segmented")
+results_SRR$Buchan <- srr_breakpoint_analysis(Herring$Buchan, "SSB_component", "Recruitment", "year", "Buchan")
 
-# Running segmented model analysis
-# Using mean SSB as initial psi: 309942.8 
-# Segmented model breakpoint:
-# SSB breakpoint: 98449.3 ± 181693.3 
-# Approximate year: 1982 
+# Optimal number of breaks: 3 
+# Best breakpoint SSB values:
+# 147574.4, 1257071.9, 123660.5 
+# Best breakpoint years:
+# 1983, 1991, 2001 
 
 #---------------------------------------------------------------------
 
@@ -420,8 +437,20 @@ models_SRR$Banks <- run_srr_analysis(
   use_bic = TRUE)
 
 print(models_SRR$Banks$comparison_table)
+#               Model          AIC    RMSE R_squared
+#        independence 1.711783e+03 3213326 0.1395247
+#       beverton_holt 9.514737e+01 3182347 0.1989981
+#              ricker 9.391551e+01 3135145 0.2289354
+#   segmented_regular 1.708380e+03 2992557 0.2536997
+#       segmented_log 9.714308e+01 5459619 0.4719001
+#  segmented_negbinom 1.659950e+03 3022782        NA
+#         strucchange 1.616282e+03 1142987 0.8911292
+#        glm_gaussian 1.711783e+03 3213326        NA
+#         glm_poisson 1.020982e+08 3274292        NA
+#    glm_quasipoisson           NA 3274292        NA
+#        glm_negbinom 1.672878e+03 3351264        NA
 
-##### strucchange model shows lowest RMSE and high R_sqrt
+##### strucchange lowest RMSE.
 
 #### Prep data for LOOCV function
 dat_Banks <- Herring$Banks %>%
@@ -439,7 +468,7 @@ rmse_mean_Banks <- cross_valid(dataset = dat_Banks)
 # TEST:   2298870   1970034     1954005   2399083     2038932     2370782     4248983
 # TRAIN:  3211518   3180706     3133516   2988736     3112284     3020506     1154869
 
-#### Non segmented models only show onpar test performance with segmented. strucchange overfitting again, segmented outperform for train.
+#### strucchange validated by loocv. 
 
 #### Call function "srr_breakpoint_analysis" to extract SSR breakpoints
 results_SRR$Banks <- srr_breakpoint_analysis(Herring$Banks, "SSB_component", "Recruitment", "year", "Banks")
@@ -462,8 +491,20 @@ models_SRR$Downs <- run_srr_analysis(
   use_bic = TRUE)
 
 print(models_SRR$Downs$comparison_table)
+#               Model          AIC    RMSE R_squared
+#        independence 1.650648e+03 1785101 0.6819995
+#       beverton_holt 1.647558e+03 1732842 0.7030111
+#              ricker 6.888289e+01 1937852 0.6302762
+#   segmented_regular 1.644580e+03 1620395 0.7379742
+#       segmented_log 4.472053e+01 5479861 0.9608838
+#  segmented_negbinom 1.631792e+03 1612934        NA
+#         strucchange 1.621802e+03 1159822 0.8657591
+#        glm_gaussian 1.650648e+03 1785101        NA
+#         glm_poisson 5.589560e+07 1890595        NA
+#    glm_quasipoisson           NA 1890595        NA
+#        glm_negbinom 1.681034e+03 2018424        NA
 
-##### segmented regression model shows lowest RMSE and high R_sqrt
+##### strucchange lowest RMSE.
 
 #### Prep data for LOOCV function
 dat_Downs <- Herring$Downs %>%
@@ -484,13 +525,13 @@ rmse_mean_Downs <- cross_valid(dataset = dat_Downs)
 #### segmented outperform classical models for train data
 
 #### Call function "srr_breakpoint_analysis" to extract SSR breakpoints
-results_SRR$Downs <- srr_breakpoint_analysis(Herring$Downs, "SSB_component", "Recruitment", "year", "Downs", method = "segmented")
+results_SRR$Downs <- srr_breakpoint_analysis(Herring$Downs, "SSB_component", "Recruitment", "year", "Downs")
 
-# Running segmented model analysis
-# Using mean SSB as initial psi: 305881.4 
-# Segmented model breakpoint:
-# SSB breakpoint:   25587.2 ± 3723 
-# Approximate year: 1982
+# Optimal number of breaks: 4 
+# Best breakpoint SSB values:
+# 17120.8, 213659.7, 565941.9, 435906.7 
+# Best breakpoint years:
+# 1980, 2000, 2007, 2014 
 ```
 
 ## Plotting
@@ -514,7 +555,7 @@ plots_SRR$SHOR
 #---------------------------------------------------------------------
 
 ### Buchan
-plots_SRR$Buchan <- plot_SRR(Herring$Buchan, break_years = results_SRR$Buchan$breakpoint_year,
+plots_SRR$Buchan <- plot_SRR(Herring$Buchan, break_years = results_SRR$Buchan$break_years,
                           title_stock = "Buchan", 
                           used_model = "strucchange", 
                           ssb_col = "SSB_component",
@@ -544,9 +585,9 @@ plots_SRR$Banks
 #---------------------------------------------------------------------
 
 ### Downs
-plots_SRR$Downs <- plot_SRR(Herring$Downs, break_years = results_SRR$Downs$breakpoint_year,
+plots_SRR$Downs <- plot_SRR(Herring$Downs, break_years = results_SRR$Downs$break_years,
                           title_stock = "Downs", 
-                          used_model = "segmented", 
+                          used_model = "strucchange", 
                           ssb_col = "SSB_component",
                           show_Blim = FALSE,
                           nudge_params = list(
@@ -577,144 +618,76 @@ ggsave(filename = file.path("plots/", "SRR_components.png"),
 
 # tGAM
 
-## Analysis
-
 ```{r}
 ### Load env and cpr data
 load("data/env_df_subset.Rdata")
 load("data/cpr_component.Rdata")
 
 ### Call "run_threshold_analysis" from functions and extract results (below)
+results_tgam <- list()
 #### SHOR
-run_threshold_analysis(Herring$SHOR, cpr_component, env_df_subset, "Shetland_Orkney")
-#### Buchan
-run_threshold_analysis(Herring$Buchan, cpr_component, env_df_subset, "Buchan")
-#### Banks
-run_threshold_analysis(Herring$Banks, cpr_component, env_df_subset, "Banks")
-#### Downs
-run_threshold_analysis(Herring$Downs, cpr_component, env_df_subset, "Downs")
-```
+results_tgam$SHOR <- run_threshold_analysis(Herring$SHOR, 
+                                            cpr_component, 
+                                            env_df_subset, 
+                                            region_name = "Shetland_Orkney",
+                                            aggregation_mode = "autumn", 
+                                            test_variables = c("Mean_SST", "Mean_SBT", "Mean_SSS"))
 
-## Results
+#  Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
+#  Mean_SST 31      0.667     0.799       0.043      11.6    No tGAM (LOOCV)
+#  Mean_SBT 31      0.667     0.713       0.018      10.0    No tGAM (LOOCV)
+#  Mean_SSS 31      0.667     0.614       0.004      35.1    No tGAM (LOOCV)
 
-#### SHOR
-
-```         
-Autumn based analysis
-Variable: SST
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 11.5437                         Variable: SBT
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 9.514                           Variable: SSS
-Time range: 1993 - 2023    LOOCV result: TRUE   Model MR: 35.0796                          Variable: Phytoplankton
-Time range: 1973 - 2021    LOOCV result: TRUE   Model MR: 25984.45                         Variable: Small zooplankton
-Time range: 1973 - 2021    LOOCV result: FALSE   Model MR: 1359.696                        
-
-Lagged autumn based analysis
-Variable: SST
-Time range: 1994 - 2023    LOOCV result: FALSE   Model MR: 11.2821                         Variable: SBT
-Time range: 1994 - 2023    LOOCV result: FALSE   Model MR: 9.5288                          Variable: SSS
-Time range: 1994 - 2023    LOOCV result: FALSE   Model MR: 35.0837                         Variable: Phytoplankton
-Time range: 1973 - 2022    LOOCV result: TRUE   Model MR: 26598.41                         Variable: Small zooplankton
-Time range: 1973 - 2022    LOOCV result: FALSE   Model MR: 1342.1                          
-
-Year based analysis
-Variable: SST
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 9.692                           Variable: SBT
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 7.979                           Variable: SSS
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 35.0815                         Variable: Phytoplankton  #### Time range: 1973 - 2021    LOOCV result: FALSE   Model MR: 155865.6                                            ### Variable: Small zooplankton  #### Time range: 1973 - 2021    LOOCV result: TRUE   Model MR: 1297.602                        
-```
-
--   Autumn based: SSS (Model MR: 35.08), Phytoplankton (Model MR: 25984.45)
--   Lagged autumn based: Phytoplankton (Model MR: 26598.41)
--   Year based: Small zooplankton (Model MR: 1297.60)
+#---------------------------------------------------------------------
 
 #### Buchan
+results_tgam$Buchan <- run_threshold_analysis(Herring$Buchan, 
+                                            cpr_component, 
+                                            env_df_subset, 
+                                            region_name = "Buchan",
+                                            aggregation_mode = "autumn", 
+                                            test_variables = c("Mean_SST", "Mean_SBT", "Mean_SSS"))
 
-```         
-Autumn based analysis
-Variable: SST
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 11.6811                         Variable: SBT
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 10.1628                         Variable: SSS
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 34.7647                         Variable: Phytoplankton
-Time range: 1975 - 2021    LOOCV result: TRUE   Model MR: 67855.51                         Variable: Small zooplankton
-Time range: 1975 - 2021    LOOCV result: TRUE   Model MR: 507.1388                         
+#  Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
+#  Mean_SST 31      0.667     0.984    4.91e-05      11.7                Yes
+#  Mean_SBT 31      0.667     0.000    9.15e-06      10.0    No tGAM (LOOCV)
+#  Mean_SSS 31      0.667     0.000    1.28e-04      34.7    No tGAM (LOOCV)
 
-Lagged autumn based analysis
-Variable: SST
-Time range: 1994 - 2023    LOOCV result: FALSE   Model MR: 11.6994                         Variable: SBT
-Time range: 1994 - 2023    LOOCV result: TRUE   Model MR: 9.9864                           Variable: SSS
-Time range: 1994 - 2023    LOOCV result: FALSE   Model MR: 34.7634                         Variable: Phytoplankton
-Time range: 1975 - 2022    LOOCV result: FALSE   Model MR: 67500.27                        Variable: Small zooplankton
-Time range: 1975 - 2022    LOOCV result: TRUE   Model MR: 504.4396                         
+png(filename = "plots/GCV_SST_Buchan.png", width = 1500, height = 1000, res = 300)
+plot_gcv_Buchan_SST <- plot_gcv_threshold(results_tgam$Buchan$autumn$SST, "SST", "(Autumn)")
+dev.off()
 
-Year based analysis
-Variable: SST
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 10.131                          Variable: SBT
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 8.2791                          Variable: SSS
-Time range: 1993 - 2023    LOOCV result: TRUE   Model MR: 34.7789                          Variable: Phytoplankton
-Time range: 1975 - 2021    LOOCV result: FALSE   Model MR: 121993.8                        Variable: Small zooplankton
-Time range: 1975 - 2021    LOOCV result: TRUE   Model MR: 837.6338                         
-```
-
--   Autumn based: Phytoplankton (67855.51), Small zooplankton (507.14)
--   Lagged autumn based: SBT (9.99), Small zooplankton (504.44)
--   Year based: SSS (34.78), Small zooplankton (837.63)
+#---------------------------------------------------------------------
 
 #### Banks
+results_tgam$Banks <- run_threshold_analysis(Herring$Banks, 
+                                            cpr_component, 
+                                            env_df_subset, 
+                                            region_name = "Banks",
+                                            aggregation_mode = "autumn", 
+                                            test_variables = c("Mean_SST", "Mean_SBT", "Mean_SSS"))
 
-```         
-Autumn based analysis
-Variable: SST
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 12.2594                         Variable: SBT
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 11.8582                         Variable: SSS
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 34.4194                         Variable: Phytoplankton
-Time range: 1977 - 2021    LOOCV result: FALSE   Model MR: 48561.05                        Variable: Small zooplankton
-Time range: 1977 - 2021    LOOCV result: FALSE   Model MR: 722.24                          
-
-Lagged autumn based analysis
-Variable: SST
-Time range: 1994 - 2023    LOOCV result: FALSE   Model MR: 12.2892                         Variable: SBT
-Time range: 1994 - 2023    LOOCV result: FALSE   Model MR: 11.3731                         Variable: SSS
-Time range: 1994 - 2023    LOOCV result: FALSE   Model MR: 34.4255                         Variable: Phytoplankton
-Time range: 1977 - 2022    LOOCV result: TRUE   Model MR: 81503.98                         Variable: Small zooplankton
-Time range: 1977 - 2022    LOOCV result: FALSE   Model MR: 562.6765                        
-
-Year based analysis
-Variable: SST
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 10.2462                         Variable: SBT
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 9.5233                          Variable: SSS
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 34.4321                         Variable: Phytoplankton
-Time range: 1977 - 2021    LOOCV result: FALSE   Model MR: 54101.01                        Variable: Small zooplankton
-Time range: 1977 - 2021    LOOCV result: FALSE   Model MR: 788.027
-```
-
--   Lagged autumn based: Phytoplankton (Model MR: 81503.98)
+#  Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
+#  Mean_SST 31      0.667         0    1.73e-09      12.3    No tGAM (LOOCV)
+#  Mean_SBT 31      0.667         0    2.19e-08      11.3    No tGAM (LOOCV)
+#  Mean_SSS 31      0.667         0    3.18e-13      34.4    No tGAM (LOOCV)
 
 #### Downs
+results_tgam$Downs <- run_threshold_analysis(Herring$Downs, 
+                                            cpr_component, 
+                                            env_df_subset, 
+                                            region_name = "Downs",
+                                            aggregation_mode = "autumn", 
+                                            test_variables = c("Mean_SST", "Mean_SBT", "Mean_SSS"))
 
-```         
-Autumn based analysis
-Variable: SST
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 15.2948                         Variable: SBT
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 15.309                          Variable: SSS
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 34.3209                         Variable: Phytoplankton
-Time range: 1973 - 2020    LOOCV result: FALSE   Model MR: 24908.67                        Variable: Small zooplankton
-Time range: 1973 - 2020    LOOCV result: FALSE   Model MR: 297.6947                        
-
-Lagged autumn based analysis
-Variable: SST
-Time range: 1994 - 2023    LOOCV result: FALSE   Model MR: 15.2864                         Variable: SBT
-Time range: 1994 - 2023    LOOCV result: FALSE   Model MR: 15.2964                         Variable: SSS
-Time range: 1994 - 2023    LOOCV result: FALSE   Model MR: 34.4379                         Variable: Phytoplankton
-Time range: 1973 - 2021    LOOCV result: FALSE   Model MR: 24847.2                         Variable: Small zooplankton
-Time range: 1973 - 2021    LOOCV result: FALSE   Model MR: 689.1399                        
-
-Year based analysis
-Variable: SST
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 12.2222                         Variable: SBT
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 12.2065                         Variable: SSS
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 34.3582                         Variable: Phytoplankton
-Time range: 1973 - 2021    LOOCV result: FALSE   Model MR: 46859.85                        Variable: Small zooplankton
-Time range: 1973 - 2021    LOOCV result: FALSE   Model MR: 699.3112                        
+#  Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
+#  Mean_SST 31      0.667         0    3.98e-10      15.3    No tGAM (LOOCV)
+#  Mean_SBT 31      0.667         0    3.98e-10      15.3    No tGAM (LOOCV)
+#  Mean_SSS 31      0.667         0    3.83e-15      34.3    No tGAM (LOOCV)
 ```
 
--   No significant thresholds found.
+### save plot
+
+```{r}
+
+```

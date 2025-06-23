@@ -42,6 +42,25 @@ load("data/Herring_full.Rdata")
 source("R/functions.R")
 ```
 
+### Plot Stock overview
+
+```{r}
+plot_overview <- plot_herring_summary(
+  srr_data = Herring_full,
+  ssb_col = "SSB",
+  recruit_col = "Recruitment",
+  year_col = "year",
+  f_col = "F")
+
+
+ggsave(filename = file.path("plots/", "overview.png"),
+       plot(plot_overview),
+       bg = "white",
+       width = 10,
+       height = 20,
+       dpi = 300)
+```
+
 # Change-points
 
 ## Identify change-points
@@ -149,11 +168,21 @@ models_SRR <- run_srr_analysis(
   max_breaks = 4,
   use_bic = TRUE)
 
-models_SRR[["comparison_table"]]
+print(models_SRR$comparison_table)
+#               Model          AIC     RMSE  R_squared
+#        independence 2.777474e+03 12571251 0.07056036
+#       beverton_holt 12160648 0.17631638
+#              ricker 1.113423e+02 12369273 0.15890238
+#   segmented_regular 2.760880e+03 11016520 0.28623866
+#       segmented_log 9.301744e+01 29027744 0.60192295
+#  segmented_negbinom 2.741850e+03 11015926         NA
+#         strucchange 2.729688e+03  8791700 0.54542040
+#        glm_gaussian 2.777474e+03 12571251         NA
+#         glm_poisson 5.007045e+08 12644111         NA
+#    glm_quasipoisson           NA 12644111         NA
+#        glm_negbinom 2.777921e+03 12705255
 
-#### Bad overdispertion for GLM's exept nebinom
-#### While seg.log shows best r_sqrt it has horible RSME
-#### strucchange model shows lowest RMSE, with second best R_sqrt
+#### strucchange lowest RMSE.
 
 ### Prep data for LOOCV function
 dat <- Herring_full %>%
@@ -170,30 +199,22 @@ rmse_mean_herring <- cross_valid(dataset = dat)
 # TEST:   10164856  9080981     10040655    9437569     9475234     9394538     12472272
 # TRAIN:  12568771  12158586    12366932    11012203    11184582    11014417    8777879
 
-#### strucchange shows bad prediction performance for but great fit to historical data, segmented models show best balance.
-#### Classical non segmented models show general bad performance (except beverton-holts good prediction performance).
+#### strucchange validated by loocv.
 
 ### Call function "srr_breakpoint_analysis"
-results_SRR <- srr_breakpoint_analysis(Herring_full, "SSB", "Recruitment", "year", "Herring Full", method ="segmented")
+results_SRR <- srr_breakpoint_analysis(Herring_full, "SSB", "Recruitment", "year", "Herring Full")
 
-# Running segmented model analysis
-# Using mean SSB as initial psi: 1647949 
-# Segmented model breakpoint:
-# SSB breakpoint: 553296.5 ± 108381.8 
-# Approximate year: 1983 
-
-plot_overview <- plot_herring_summary(
-  srr_data = Herring_full,
-  ssb_col = "SSB",
-  recruit_col = "Recruitment",
-  year_col = "year",
-  f_col = "F")
+# Optimal number of breaks: 2 
+# Best breakpoint SSB values:
+# 264793.8, 2391903.7 
+# Best breakpoint years:
+# 1981, 2002 
 ```
 
 ## Plotting
 
 ```{r}
-plot_SRR_full <- plot_SRR(Herring_full, break_years = results_SRR$breakpoint_year, "Full Stock", "segmented")
+plot_SRR_full <- plot_SRR(Herring_full, break_years = results_SRR$break_years, "Full Stock", "strucchange")
 plot_SRR_full
 ```
 
@@ -206,18 +227,9 @@ ggsave(filename = file.path("plots/", "SRR_full.png"),
        width = 15,
        height = 10,
        dpi = 300)
-
-ggsave(filename = file.path("plots/", "overview.png"),
-       plot(plot_overview),
-       bg = "white",
-       width = 10,
-       height = 20,
-       dpi = 300)
 ```
 
 # tGAM
-
-## Analysis
 
 ```{r}
 ### Load env and cpr data
@@ -225,37 +237,17 @@ load("data/env_df_full.Rdata")
 load("data/cpr_full.Rdata")
 
 ### Call "run_threshold_analysis" from functions and extract results (below)
-run_threshold_analysis(Herring_full, cpr_full, env_df_full)
+results_tgam <- run_threshold_analysis(Herring_full, cpr_full, env_df_full, 
+                       aggregation_mode = "year", 
+                       test_variables = c("Mean_SST", "Mean_SBT", "Mean_SSS"))
+
+#  Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
+#  Mean_SST 31      0.667     0.721    1.19e-09      10.5    No tGAM (LOOCV)
+#  Mean_SBT 31      0.667     0.619    2.31e-05       8.6    No tGAM (LOOCV)
+#  Mean_SSS 31      0.667     0.000    5.64e-08      34.4    No tGAM (LOOCV)
+
+#### no threshold accepted
+
+### If valid Look at GCV minimum
+#plot_gcv_threshold(results_tgam$autumn$SST, "SST", "(Autumn)")
 ```
-
-## Results
-
-```         
-Autumn based analysis
-Variable: SST
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 12.7599                         Variable: SBT
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 10.5124                         Variable: SSS
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 34.4627                         Variable: Phytoplankton
-Time range: 1958 - 2021    LOOCV result: FALSE   Model MR: 124756.6                        Variable: Small zooplankton
-Time range: 1958 - 2021    LOOCV result: TRUE   Model MR: 847.3968                         
-
-Lagged autumn based analysis
-Variable: SST
-Time range: 1994 - 2024    LOOCV result: FALSE   Model MR: 12.4188                         Variable: SBT
-Time range: 1994 - 2024    LOOCV result: FALSE   Model MR: 10.1526                         Variable: SSS
-Time range: 1994 - 2024    LOOCV result: FALSE   Model MR: 34.4627                         Variable: Phytoplankton
-Time range: 1959 - 2022    LOOCV result: FALSE   Model MR: 101237.4                        Variable: Small zooplankton
-Time range: 1959 - 2022    LOOCV result: FALSE   Model MR: 847.3968                        
-
-Year based analysis
-Variable: SST
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 10.5013                         Variable: SBT
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 8.5684                          Variable: SSS
-Time range: 1993 - 2023    LOOCV result: FALSE   Model MR: 34.4184                         Variable: Phytoplankton
-Time range: 1958 - 2021    LOOCV result: TRUE   Model MR: 123351.8                         Variable: Small zooplankton
-Time range: 1958 - 2021    LOOCV result: TRUE   Model MR: 953.3124
-```
-
--   Autumn based: Small zooplankton (Model MR: 847.40)
--   Year based: Phytoplankton (Model MR: 123351.80)
--   Year based: Small zooplankton (Model MR: 953.31)

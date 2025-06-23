@@ -20,3 +20,5 @@ project.
     Recruitment (R) for the full stock and individual components.
 -   **SSB\_cpt\_** shows the SSB for each area over time including
     calculated change-points and corresponding phases.
+-   **overview** contains a grid of basic descriptive plots for the stock (SSB, Recruitment, F and recruitment residuals for the most appropriate model)
+-   **GCV\_SST\_** shows the GVC values and threshold for the tGAM analysis.

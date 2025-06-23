@@ -115,29 +115,235 @@ fit_beverton_holt <- function(data, recruit_col = "R", ssb_col = "SSB") {
   formula_str_srStarts <- paste(recruit_col, "~", ssb_col)
   formula_obj_srStarts <- as.formula(formula_str_srStarts)
   
-  fitted_vals <- rep(NA, nrow(data)) # Initialize with NA
-  r2 <- NA # Initialize r2
+  fitted_vals <- rep(NA, nrow(data))
+  r2 <- NA
   
+  cat("Fitting Beverton-Holt model...\n")
+  
+  # Step 1: Data validation and cleaning
+  recruit_data <- data[[recruit_col]]
+  ssb_data <- data[[ssb_col]]
+  
+  # Check for problematic values
+  cat("  Data diagnostics:\n")
+  cat("    Recruitment range:", range(recruit_data, na.rm = TRUE), "\n")
+  cat("    SSB range:", range(ssb_data, na.rm = TRUE), "\n")
+  cat("    Zero/negative recruitment:", sum(recruit_data <= 0, na.rm = TRUE), "\n")
+  cat("    Zero/negative SSB:", sum(ssb_data <= 0, na.rm = TRUE), "\n")
+  cat("    Missing recruitment:", sum(is.na(recruit_data)), "\n")
+  cat("    Missing SSB:", sum(is.na(ssb_data)), "\n")
+  
+  # Handle problematic values
+  if (any(recruit_data <= 0, na.rm = TRUE) || any(ssb_data <= 0, na.rm = TRUE)) {
+    cat("  Warning: Non-positive values detected. Applying small offset...\n")
+    
+    # Apply small positive offset to avoid log(0) or log(negative)
+    min_recruit <- min(recruit_data[recruit_data > 0], na.rm = TRUE)
+    min_ssb <- min(ssb_data[ssb_data > 0], na.rm = TRUE)
+    
+    offset_recruit <- min_recruit * 0.001
+    offset_ssb <- min_ssb * 0.001
+    
+    recruit_data[recruit_data <= 0] <- offset_recruit
+    ssb_data[ssb_data <= 0] <- offset_ssb
+    
+    cat("    Applied offsets: Recruitment =", offset_recruit, ", SSB =", offset_ssb, "\n")
+  }
+  
+  # Create cleaned data frame
+  data_clean <- data.frame(
+    R = recruit_data,
+    SSB = ssb_data
+  )
+  names(data_clean) <- c(recruit_col, ssb_col)
+  
+  # Remove rows with NA values
+  complete_rows <- complete.cases(data_clean)
+  if (sum(complete_rows) < 5) {
+    warning("Insufficient complete data for Beverton-Holt model (< 5 observations)")
+    return(list(model = NULL, fitted = fitted_vals, r2 = r2))
+  }
+  
+  data_clean <- data_clean[complete_rows, ]
+  cat("  Using", nrow(data_clean), "complete observations\n")
+  
+  # Step 2: Multiple approaches for fitting Beverton-Holt
+  
+  # Approach 1: Standard FSA approach with enhanced error handling
   tryCatch({
-    # Suppress warnings/messages from nls convergence issues
+    cat("  Approach 1: Standard FSA method...\n")
+    
     suppressWarnings(suppressMessages({
-      sv <- FSA::srStarts(formula_obj_srStarts, data = data, type = "BevertonHolt")
+      # Get starting values
+      sv <- FSA::srStarts(formula_obj_srStarts, data = data_clean, type = "BevertonHolt")
+      cat("    Starting values: a =", sv$a, ", b =", sv$b, "\n")
+      
+      # Validate starting values
+      if (any(is.na(sv)) || any(!is.finite(unlist(sv)))) {
+        stop("Invalid starting values from srStarts")
+      }
+      
+      bh <- FSA::srFuns("BevertonHolt")
+      
+      # Test the BH function with starting values
+      test_bh <- bh(data_clean[[ssb_col]], a = sv$a, b = sv$b)
+      if (any(test_bh <= 0, na.rm = TRUE) || any(!is.finite(test_bh))) {
+        stop("BH function produces non-positive or non-finite values with starting values")
+      }
+      
+      log_formula_str <- paste("log(", recruit_col, ") ~ log(bh(", ssb_col, ", a, b))")
+      
+      model <- nls(as.formula(log_formula_str), 
+                   data = data_clean, 
+                   start = sv,
+                   control = nls.control(maxiter = 100, minFactor = 1/4096, tol = 1e-6))
+      
+      # Calculate fitted values for full dataset
+      fitted_vals_clean <- bh(data_clean[[ssb_col]], a = coef(model)["a"], b = coef(model)["b"])
+      
+      # Map back to original data
+      fitted_vals[complete_rows] <- fitted_vals_clean
+      
+      r2 <- cor(fitted_vals_clean, data_clean[[recruit_col]], use = "complete.obs")^2
+      
+      cat("    SUCCESS: R² =", round(r2, 4), "\n")
+      return(list(model = model, fitted = fitted_vals, r2 = r2))
+    }))
+    
+  }, error = function(e) {
+    cat("    Standard approach failed:", e$message, "\n")
+  })
+  
+  # Approach 2: Manual starting values
+  tryCatch({
+    cat("  Approach 2: Manual starting values...\n")
+    
+    # Calculate reasonable starting values manually
+    max_recruit <- max(data_clean[[recruit_col]], na.rm = TRUE)
+    mean_ssb <- mean(data_clean[[ssb_col]], na.rm = TRUE)
+    
+    # For Beverton-Holt: R = (a * SSB) / (b + SSB)
+    # a ≈ maximum recruitment potential
+    # b ≈ SSB at which recruitment is half of maximum
+    sv_manual <- list(a = max_recruit * 1.2, b = mean_ssb)
+    
+    cat("    Manual starting values: a =", sv_manual$a, ", b =", sv_manual$b, "\n")
+    
+    suppressWarnings({
       bh <- FSA::srFuns("BevertonHolt")
       
       log_formula_str <- paste("log(", recruit_col, ") ~ log(bh(", ssb_col, ", a, b))")
-      model <- nls(as.formula(log_formula_str), data = data, start = sv)
       
-      fitted_vals <- bh(data[[ssb_col]], a = coef(model))
-      r2 <- cor(fitted_vals, data[[recruit_col]], use = "pairwise.complete.obs")^2
-    }))
+      model <- nls(as.formula(log_formula_str), 
+                   data = data_clean, 
+                   start = sv_manual,
+                   control = nls.control(maxiter = 200, minFactor = 1/8192, tol = 1e-5))
+      
+      fitted_vals_clean <- bh(data_clean[[ssb_col]], a = coef(model)["a"], b = coef(model)["b"])
+      fitted_vals[complete_rows] <- fitted_vals_clean
+      
+      r2 <- cor(fitted_vals_clean, data_clean[[recruit_col]], use = "complete.obs")^2
+      
+      cat("    SUCCESS with manual starting values: R² =", round(r2, 4), "\n")
+      return(list(model = model, fitted = fitted_vals, r2 = r2))
+    })
     
-    list(model = model, fitted = fitted_vals, r2 = r2)
   }, error = function(e) {
-    warning(paste("Beverton-Holt model failed:", e$message))
-    list(model = NULL, fitted = fitted_vals, r2 = r2)
+    cat("    Manual starting values approach failed:", e$message, "\n")
   })
+  
+  # Approach 3: Alternative parameterization
+  tryCatch({
+    cat("  Approach 3: Alternative parameterization...\n")
+    
+    # Use direct nonlinear least squares without log transformation
+    bh_direct <- function(ssb, a, b) {
+      (a * ssb) / (b + ssb)
+    }
+    
+    # Starting values based on data characteristics
+    max_recruit <- max(data_clean[[recruit_col]], na.rm = TRUE)
+    median_ssb <- median(data_clean[[ssb_col]], na.rm = TRUE)
+    
+    sv_alt <- list(a = max_recruit, b = median_ssb * 0.5)
+    
+    direct_formula <- as.formula(paste(recruit_col, "~ bh_direct(", ssb_col, ", a, b)"))
+    
+    model_direct <- nls(direct_formula,
+                        data = data_clean,
+                        start = sv_alt,
+                        control = nls.control(maxiter = 200, minFactor = 1/8192))
+    
+    fitted_vals_clean <- bh_direct(data_clean[[ssb_col]], 
+                                   a = coef(model_direct)["a"], 
+                                   b = coef(model_direct)["b"])
+    fitted_vals[complete_rows] <- fitted_vals_clean
+    
+    r2 <- cor(fitted_vals_clean, data_clean[[recruit_col]], use = "complete.obs")^2
+    
+    cat("    SUCCESS with alternative parameterization: R² =", round(r2, 4), "\n")
+    return(list(model = model_direct, fitted = fitted_vals, r2 = r2))
+    
+  }, error = function(e) {
+    cat("    Alternative parameterization failed:", e$message, "\n")
+  })
+  
+  # Approach 4: Robust optimization with multiple starting points
+  tryCatch({
+    cat("  Approach 4: Multiple starting points...\n")
+    
+    # Try multiple combinations of starting values
+    max_recruit <- max(data_clean[[recruit_col]], na.rm = TRUE)
+    ssb_range <- range(data_clean[[ssb_col]], na.rm = TRUE)
+    
+    a_candidates <- c(max_recruit * 0.8, max_recruit * 1.0, max_recruit * 1.5)
+    b_candidates <- c(ssb_range[1] * 0.5, mean(data_clean[[ssb_col]]) * 0.5, ssb_range[2] * 0.3)
+    
+    best_model <- NULL
+    best_r2 <- -Inf
+    
+    for (a_start in a_candidates) {
+      for (b_start in b_candidates) {
+        tryCatch({
+          sv_test <- list(a = a_start, b = b_start)
+          
+          bh <- FSA::srFuns("BevertonHolt")
+          log_formula_str <- paste("log(", recruit_col, ") ~ log(bh(", ssb_col, ", a, b))")
+          
+          model_test <- nls(as.formula(log_formula_str), 
+                            data = data_clean, 
+                            start = sv_test,
+                            control = nls.control(maxiter = 50, minFactor = 1/2048, warnOnly = TRUE))
+          
+          fitted_test <- bh(data_clean[[ssb_col]], a = coef(model_test)["a"], b = coef(model_test)["b"])
+          r2_test <- cor(fitted_test, data_clean[[recruit_col]], use = "complete.obs")^2
+          
+          if (r2_test > best_r2) {
+            best_model <- model_test
+            best_r2 <- r2_test
+            fitted_vals[complete_rows] <- fitted_test
+          }
+          
+        }, error = function(e) {
+          # Continue to next combination
+        })
+      }
+    }
+    
+    if (!is.null(best_model)) {
+      cat("    SUCCESS with multiple starting points: Best R² =", round(best_r2, 4), "\n")
+      return(list(model = best_model, fitted = fitted_vals, r2 = best_r2))
+    }
+    
+  }, error = function(e) {
+    cat("    Multiple starting points approach failed:", e$message, "\n")
+  })
+  
+  # If all approaches failed
+  cat("  All Beverton-Holt approaches failed\n")
+  warning("Beverton-Holt model could not be fitted with any method")
+  return(list(model = NULL, fitted = fitted_vals, r2 = r2))
 }
-
 # Fit a Ricker stock-recruitment model
 #
 # @param data A data frame.
@@ -306,6 +512,8 @@ fit_segmented_models <- function(data, recruit_col = "R", ssb_col = "SSB") {
 # @param max_breaks The maximum number of breakpoints to consider (integer).
 # @param use_bic Whether to use BIC for optimal breakpoint selection (logical).
 # @return A list containing the fitted model, detected breakpoints, and related objects.
+# Updated fit_strucchange function with robust RSS table handling
+# This version handles different RSS table column naming conventions
 fit_strucchange <- function(data, recruit_col = "R", ssb_col = "SSB", max_breaks = 3, use_bic = TRUE) {
   check_data_columns(data, c(recruit_col, ssb_col))
   
@@ -333,60 +541,154 @@ fit_strucchange <- function(data, recruit_col = "R", ssb_col = "SSB", max_breaks
         cat("Attempting BIC-based breakpoint selection...\n")
         bpts_bic <- strucchange::breakpoints(bpts, ic = "BIC")
         
-        if (!is.null(bpts_bic) && !is.na(bpts_bic$breakpoints[1])) {
-          optimal_breaks <- length(bpts_bic$breakpoints)
-          best_brk <- data[[ssb_col]][bpts_bic$breakpoints]
-          cat("BIC selected", optimal_breaks, "breakpoints at positions:", best_brk, "\n")
+        if (!is.null(bpts_bic) && length(bpts_bic$breakpoints) > 0 && !all(is.na(bpts_bic$breakpoints))) {
+          optimal_breaks <- length(bpts_bic$breakpoints[!is.na(bpts_bic$breakpoints)])
+          if (optimal_breaks > 0) {
+            best_brk <- data[[ssb_col]][bpts_bic$breakpoints[!is.na(bpts_bic$breakpoints)]]
+            cat("BIC selected", optimal_breaks, "breakpoints at positions:", best_brk, "\n")
+          } else {
+            cat("BIC returned only NA breakpoints, falling back to RSS method\n")
+            use_bic <- FALSE
+          }
         } else {
-          cat("BIC method returned NA breakpoints, falling back to RSS method\n")
-          use_bic <- FALSE  # Fall back to RSS method
+          cat("BIC method returned NULL/empty breakpoints, falling back to RSS method\n")
+          use_bic <- FALSE
         }
       }, error = function(e) {
         cat("BIC method failed:", e$message, "- falling back to RSS method\n")
-        use_bic <- FALSE  # Fall back to RSS method
+        use_bic <- FALSE
       })
     }
     
     if (!use_bic) {
-      # Method 2: Fallback using RSS table analysis
+      # Method 2: Enhanced RSS-based breakpoint selection with robust column detection
       tryCatch({
         cat("Using RSS-based breakpoint selection...\n")
         
         # Check if RSS table exists and has the expected structure
-        if (!is.null(bpts$RSS.table) && is.matrix(bpts$RSS.table)) {
-          rss_table <- bpts$RSS.table
+        if (!is.null(bpts$RSS.table) && (is.matrix(bpts$RSS.table) || is.data.frame(bpts$RSS.table))) {
+          rss_table <- as.matrix(bpts$RSS.table)  # Ensure it's a matrix
           cat("RSS table dimensions:", dim(rss_table), "\n")
           
-          # Find the optimal number of breaks (up to max_breaks)
-          max_possible_breaks <- min(max_breaks, nrow(rss_table))
+          # Get available column names
+          col_names <- colnames(rss_table)
+          if (is.null(col_names)) {
+            col_names <- paste0("Col", 1:ncol(rss_table))
+          }
           
-          if (max_possible_breaks > 0) {
-            # Simple heuristic: look for the "elbow" in RSS reduction
-            rss_values <- rss_table[1:max_possible_breaks, "RSS"]
+          # Find maximum feasible number of breaks
+          max_feasible_breaks <- min(max_breaks, nrow(rss_table))
+          
+          if (max_feasible_breaks > 0) {
+            # Strategy 1: Look for RSS columns by name pattern
+            rss_column_found <- NULL
+            rss_values <- NULL
             
-            # Calculate RSS reduction ratios
-            if (length(rss_values) > 1) {
-              rss_reductions <- diff(rss_values) / rss_values[-length(rss_values)]
-              # Find the point where RSS reduction becomes marginal (< 10%)
-              significant_reductions <- which(abs(rss_reductions) > 0.1)
-              
-              if (length(significant_reductions) > 0) {
-                optimal_breaks <- max(significant_reductions)
-              } else {
-                optimal_breaks <- 1  # Default to 1 break if no significant reductions
+            # Try different RSS column naming patterns
+            rss_patterns <- c("^RSS$", "^rss$", "^RSS1$", "^rss1$", "RSS1", "rss1")
+            
+            for (pattern in rss_patterns) {
+              matching_cols <- grep(pattern, col_names, value = TRUE)
+              if (length(matching_cols) > 0) {
+                candidate_col <- matching_cols[1]  # Use first match
+                tryCatch({
+                  # Test if we can extract values safely
+                  test_values <- rss_table[1:min(max_feasible_breaks, nrow(rss_table)), candidate_col]
+                  if (length(test_values) > 0 && all(is.finite(test_values))) {
+                    cat("Successfully using RSS column:", candidate_col, "\n")
+                    rss_column_found <- candidate_col
+                    rss_values <- test_values
+                    break
+                  }
+                }, error = function(e) {
+                  cat("Failed to use column", candidate_col, ":", e$message, "\n")
+                })
               }
-            } else {
-              optimal_breaks <- 1
             }
             
-            # Get breakpoints for the optimal number
-            bpts_optimal <- strucchange::breakpoints(bpts, breaks = optimal_breaks)
-            if (!is.null(bpts_optimal) && !is.na(bpts_optimal$breakpoints[1])) {
-              best_brk <- data[[ssb_col]][bpts_optimal$breakpoints]
-              cat("RSS method selected", optimal_breaks, "breakpoints at positions:", best_brk, "\n")
+            # Strategy 2: If no named RSS column found, examine all columns for RSS-like data
+            if (is.null(rss_column_found)) {
+              cat("No standard RSS column found, examining all columns...\n")
+              
+              for (i in 1:ncol(rss_table)) {
+                col_name <- col_names[i]
+                # Skip columns that clearly contain breakpoint indices (not RSS values)
+                if (grepl("break", col_name, ignore.case = TRUE)) {
+                  next
+                }
+                
+                tryCatch({
+                  test_values <- rss_table[1:min(max_feasible_breaks, nrow(rss_table)), i]
+                  # Check if values look like RSS (positive, decreasing trend expected)
+                  if (length(test_values) > 0 && all(is.finite(test_values)) && all(test_values > 0)) {
+                    cat("Using column", col_name, "as RSS values\n")
+                    rss_column_found <- col_name
+                    rss_values <- test_values
+                    break
+                  }
+                }, error = function(e) {
+                  # Continue to next column
+                })
+              }
+            }
+            
+            # Strategy 3: If still no column found, use conservative default
+            if (is.null(rss_column_found)) {
+              cat("Could not identify RSS column, using conservative approach with 1 breakpoint\n")
+              optimal_breaks <- 1
+            } else {
+              # Determine optimal number of breaks based on RSS values
+              if (length(rss_values) > 1) {
+                # Simple heuristic: look for the "elbow" in RSS reduction
+                rss_reductions <- diff(rss_values) / rss_values[-length(rss_values)]
+                # Find the point where RSS reduction becomes marginal (< 10%)
+                significant_reductions <- which(abs(rss_reductions) > 0.1)
+                
+                if (length(significant_reductions) > 0) {
+                  optimal_breaks <- min(max(significant_reductions), max_feasible_breaks)
+                } else {
+                  optimal_breaks <- 1  # Default to 1 break if no significant reductions
+                }
+              } else {
+                optimal_breaks <- 1
+              }
+              
+              cat("RSS analysis suggests", optimal_breaks, "optimal breakpoints\n")
+            }
+            
+            # Validate the selected number of breaks by trying to create breakpoints
+            if (optimal_breaks > 0) {
+              tryCatch({
+                bpts_test <- strucchange::breakpoints(bpts, breaks = optimal_breaks)
+                if (!is.null(bpts_test) && !is.null(bpts_test$breakpoints) && 
+                    !all(is.na(bpts_test$breakpoints))) {
+                  best_brk <- data[[ssb_col]][bpts_test$breakpoints[!is.na(bpts_test$breakpoints)]]
+                  cat("Successfully validated", optimal_breaks, "breakpoints at:", best_brk, "\n")
+                } else {
+                  cat("Validation failed for", optimal_breaks, "breaks, trying fewer\n")
+                  # Try with fewer breaks
+                  for (fewer_breaks in (optimal_breaks-1):1) {
+                    bpts_test_fewer <- strucchange::breakpoints(bpts, breaks = fewer_breaks)
+                    if (!is.null(bpts_test_fewer) && !is.null(bpts_test_fewer$breakpoints) && 
+                        !all(is.na(bpts_test_fewer$breakpoints))) {
+                      optimal_breaks <- fewer_breaks
+                      best_brk <- data[[ssb_col]][bpts_test_fewer$breakpoints[!is.na(bpts_test_fewer$breakpoints)]]
+                      cat("Successfully validated", optimal_breaks, "breakpoints at:", best_brk, "\n")
+                      break
+                    }
+                  }
+                }
+              }, error = function(e) {
+                cat("Error validating breakpoints:", e$message, "\n")
+                optimal_breaks <- 0
+              })
             }
           }
+        } else {
+          cat("RSS table is NULL, not a matrix, or not a data frame\n")
+          optimal_breaks <- 0
         }
+        
       }, error = function(e) {
         cat("RSS method also failed:", e$message, "\n")
         optimal_breaks <- 0
@@ -396,21 +698,53 @@ fit_strucchange <- function(data, recruit_col = "R", ssb_col = "SSB", max_breaks
     # Step 3: Fit the final model
     if (optimal_breaks > 0 && !is.null(best_brk)) {
       # Fit segmented model with optimal breakpoints
-      bpts_final <- strucchange::breakpoints(bpts, breaks = optimal_breaks)
-      
-      # Create the model formula with breakfactor
-      model_formula <- as.formula(paste(recruit_col, "~", 
-                                        paste0("strucchange::breakfactor(bpts_final, breaks = ", optimal_breaks, ")")))
-      
-      model <- lm(model_formula, data = data)
-      fitted_values <- predict(model, newdata = data)
-      
-      list(model = model, 
-           breakpoints = best_brk, 
-           bpts_obj = bpts, 
-           fitted = fitted_values,
-           optimal_breaks = optimal_breaks,
-           method = ifelse(use_bic, "BIC", "RSS"))
+      tryCatch({
+        bpts_final <- strucchange::breakpoints(bpts, breaks = optimal_breaks)
+        
+        # Validate final breakpoints object
+        if (is.null(bpts_final) || is.null(bpts_final$breakpoints) || all(is.na(bpts_final$breakpoints))) {
+          stop("Final breakpoints object is invalid")
+        }
+        
+        # Create breakpoint factor
+        bp_factor <- strucchange::breakfactor(bpts_final, breaks = optimal_breaks)
+        
+        # Validate breakpoint factor
+        if (length(bp_factor) != nrow(data)) {
+          stop("Breakpoint factor length doesn't match data")
+        }
+        
+        # Fit final model
+        temp_data <- data
+        temp_data$bp_factor <- bp_factor
+        
+        model_formula <- as.formula(paste(recruit_col, "~ bp_factor *", ssb_col))
+        model <- lm(model_formula, data = temp_data)
+        fitted_values <- fitted(model)
+        
+        # Validate fitted values
+        if (any(is.na(fitted_values)) || any(is.infinite(fitted_values))) {
+          warning("Invalid fitted values detected in final model")
+        }
+        
+        list(model = model, 
+             breakpoints = best_brk, 
+             bpts_obj = bpts, 
+             fitted = fitted_values,
+             optimal_breaks = optimal_breaks,
+             method = ifelse(use_bic, "BIC", "RSS"))
+        
+      }, error = function(e) {
+        cat("Error fitting final breakpoint model:", e$message, "\n")
+        cat("Falling back to simple linear model\n")
+        model <- lm(as.formula(formula_str), data = data)
+        list(model = model, 
+             breakpoints = NULL, 
+             bpts_obj = NULL, 
+             fitted = fitted(model),
+             optimal_breaks = 0,
+             method = "final_error_fallback")
+      })
       
     } else {
       # No breakpoints found or all methods failed - fit simple linear model

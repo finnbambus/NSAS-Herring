@@ -1595,63 +1595,42 @@ plot_SRR <- function(data, break_years, title_stock, used_model,
 #--------------------------------------------------------------------------------------
 ## Threshold GAM Analysis Functions
 #--------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------
+## Streamlined Threshold GAM Analysis Function
+#--------------------------------------------------------------------------------------
 
-# Core threshold GAM function
 run_threshold_gam <- function(data, 
                               response_var, 
                               pressure_var, 
                               threshold_var, 
-                              time_var = "year") {
-  
-  # Step 1: Find the optimal data range (where all required variables have data)
-  find_complete_data_range <- function(data, vars) {
-    # Check which rows have complete data for all required variables
-    complete_rows <- complete.cases(data[vars])
-    
-    if (sum(complete_rows) == 0) {
-      stop(paste("No complete cases found for variables:", paste(vars, collapse = ", ")))
-    }
-    
-    # Find first and last complete data points
-    first_complete <- which.max(complete_rows)  # First TRUE
-    last_complete <- max(which(complete_rows))  # Last TRUE
-    
-    return(list(
-      start_idx = first_complete,
-      end_idx = last_complete,
-      complete_rows = complete_rows,
-      n_complete = sum(complete_rows)))}
+                              time_var = "year",
+                              debug = FALSE) {
   
   # Required variables for the analysis
   required_vars <- c(response_var, pressure_var, threshold_var, time_var)
   
-  # Find optimal data range
-  data_range <- find_complete_data_range(data, required_vars)
+  # Find complete data range
+  complete_rows <- complete.cases(data[required_vars])
+  if (sum(complete_rows) < 10) {
+    stop("Insufficient data: Need at least 10 complete observations for GAM analysis")
+  }
   
-  if (data_range$n_complete < 10) {
-    stop("Insufficient data: Need at least 10 complete observations for GAM analysis")}
+  # Get indices for complete data range
+  first_complete <- which.max(complete_rows)
+  last_complete <- max(which(complete_rows))
   
-  # Step 2: Subset data to optimal range
-  analysis_data <- data[data_range$start_idx:data_range$end_idx, ]
+  # Subset to optimal range and remove any remaining NAs
+  analysis_data <- data[first_complete:last_complete, ]
+  analysis_data <- analysis_data[complete.cases(analysis_data[required_vars]), ]
   
-  # Double-check: remove any remaining NAs (shouldn't be any, but safety check)
-  complete_analysis <- complete.cases(analysis_data[required_vars])
-  if (!all(complete_analysis)) {
-    warning("Some NAs found in middle of data range - removing these rows")
-    analysis_data <- analysis_data[complete_analysis, ]}
-  
-  # Step 3: Extract variables for analysis
+  # Extract variables
   y <- analysis_data[[response_var]]
   x <- analysis_data[[pressure_var]]
   x2 <- analysis_data[[threshold_var]]
   time <- analysis_data[[time_var]]
   
-  # Step 4: Run GAM analysis
-  
-  # Fit base GAM model
+  # Fit models
   mod <- gam(y ~ s(x, k = 3))
-  
-  # Fit threshold GAM
   tmod <- thresh_gam(
     model = mod, 
     ind_vec = y, 
@@ -1660,9 +1639,10 @@ run_threshold_gam <- function(data,
     name_t_var = threshold_var,
     k = 4, 
     a = 0.2, 
-    b = 0.8)
+    b = 0.8
+  )
   
-  # Step 6: Cross-validation
+  # Cross-validation
   loocv_result <- loocv_thresh_gam(
     model = mod, 
     ind_vec = y, 
@@ -1672,198 +1652,497 @@ run_threshold_gam <- function(data,
     k = 4, 
     a = 0.2, 
     b = 0.8, 
-    time = time)
+    time = time
+  )
   
-  # Step 7: Print key results in readable format
-  cat("#### Time range:", min(time), "-", max(time), "   ")
-  cat("LOOCV result:", loocv_result$result, "  ")
-  cat("Model MR:", round(tmod$mr, 4), "\n")}
+  # Extract model diagnostics
+  loocv_passed <- loocv_result$result
+  
+  # Extract EDF values
+  edf_before <- if (!is.null(tmod$edf) && length(tmod$edf) >= 2) tmod$edf[1] else NA
+  edf_after <- if (!is.null(tmod$edf) && length(tmod$edf) >= 2) tmod$edf[2] else NA
+  edf_differ <- if (!is.na(edf_before) && !is.na(edf_after)) abs(edf_before - edf_after) > 0.1 else FALSE
+  
+  # Extract p-values with multiple fallback methods
+  p_values <- NA
+  significant_slope <- FALSE
+  
+  tryCatch({
+    if (!is.null(tmod$p_val)) {
+      p_values <- tmod$p_val
+    } else {
+      gam_summary <- summary(tmod)
+      if (!is.null(gam_summary$p.table)) {
+        p_values <- gam_summary$p.table[, "Pr(>|t|)"]
+      } else if (!is.null(gam_summary$s.table)) {
+        p_values <- gam_summary$s.table[, "p-value"]
+      } else if (!is.null(tmod$coefficients) && !is.null(tmod$Vp)) {
+        coefs <- tmod$coefficients
+        se <- sqrt(diag(tmod$Vp))
+        t_values <- coefs / se
+        p_values <- 2 * (1 - pnorm(abs(t_values)))
+      }
+    }
+    
+    if (!is.na(p_values[1])) {
+      significant_slope <- any(p_values < 0.05, na.rm = TRUE)
+    }
+  }, error = function(e) {
+    if (debug) cat("P-value extraction error:", e$message, "\n")
+  })
+  
+  # Extract GCV data
+  gcv_data <- if (!is.null(tmod$gcvv) && !is.null(tmod$t_val)) {
+    data.frame(
+      threshold_values = tmod$t_val,
+      gcv_values = tmod$gcvv,
+      selected_threshold = tmod$mr
+    )
+  } else NULL
+  
+  # Determine acceptance status
+  threshold_accepted <- loocv_passed && edf_differ && significant_slope
+  
+  acceptance_status <- if (!loocv_passed) {
+    "No tGAM (LOOCV)"
+  } else if (!edf_differ) {
+    "No tGAM (EDF similar)"
+  } else if (!significant_slope) {
+    "No tGAM (p-values)"
+  } else {
+    "Yes"
+  }
+  
+  if (debug) {
+    cat("\n=== THRESHOLD GAM RESULTS ===\n")
+    cat("LOOCV passed:", loocv_passed, "\n")
+    cat("EDF differ:", edf_differ, "(", round(edf_before, 3), "vs", round(edf_after, 3), ")\n")
+    cat("Significant slope:", significant_slope, "\n")
+    cat("Overall accepted:", threshold_accepted, "\n")
+    cat("Status:", acceptance_status, "\n\n")
+  }
+  
+  # Return comprehensive results
+  return(list(
+    # Basic metrics
+    n = length(y),
+    edf_before = if(!is.na(edf_before)) round(edf_before, 3) else NA,
+    edf_after = if(!is.na(edf_after)) round(edf_after, 3) else NA,
+    p_values = if(!is.na(p_values[1])) round(p_values, 3) else NA,
+    threshold = round(tmod$mr, 1),
+    threshold_accepted = acceptance_status,
+    
+    # Acceptance criteria (NEW: detailed breakdown)
+    acceptance_criteria = list(
+      loocv_passed = loocv_passed,
+      edf_differ = edf_differ,
+      significant_slope = significant_slope,
+      overall_accepted = threshold_accepted
+    ),
+    
+    # Model objects and data
+    gcv_data = gcv_data,
+    loocv_result = loocv_result,
+    threshold_model = tmod,
+    base_model = mod,
+    
+    # Analysis metadata (NEW)
+    analysis_info = list(
+      time_range = c(min(time), max(time)),
+      data_range = list(
+        start_idx = first_complete,
+        end_idx = last_complete,
+        n_complete = length(y)
+      ),
+      variables = list(
+        response = response_var,
+        pressure = pressure_var,
+        threshold = threshold_var,
+        time = time_var
+      )
+    ),
+    
+    # Summary table row (NEW: for easy compilation)
+    summary_row = data.frame(
+      Variable = threshold_var,
+      n = length(y),
+      edf_before = if(!is.na(edf_before)) round(edf_before, 3) else NA,
+      edf_after = if(!is.na(edf_after)) round(edf_after, 3) else NA,
+      p_value_min = if(!is.na(p_values[1])) {
+        min_p <- min(p_values, na.rm = TRUE)
+        if (min_p < 0.001) sprintf("%.2e", min_p) else round(min_p, 3)
+      } else NA,
+      Threshold = round(tmod$mr, 1),
+      Threshold_accepted = acceptance_status,
+      stringsAsFactors = FALSE
+    )
+  ))
+}
 
 #--------------------------------------------------------------------------------------
-## Automated Threshold Analysis Workflow
+## Streamlined Automated Threshold Analysis Workflow
 #--------------------------------------------------------------------------------------
 
-run_threshold_analysis <- function(herring_region_data, cpr_data, env_data, region_name = NULL) {
+run_threshold_analysis <- function(herring_region_data, 
+                                   cpr_data, 
+                                   env_data, 
+                                   region_name = NULL,
+                                   aggregation_mode = "all",
+                                   test_variables = "all",
+                                   debug = FALSE) {
   
-  # Check if we need to filter by region or use data as-is
+  # Validate inputs
+  valid_modes <- c("all", "autumn", "lagged", "year")
+  if (!aggregation_mode %in% valid_modes) {
+    stop(paste("Invalid aggregation_mode. Must be one of:", paste(valid_modes, collapse = ", ")))
+  }
+  
+  # Define variables to test
+  all_variables <- c("Mean_SST", "Mean_SBT", "Mean_SSS", "phytoplankton", "small_zooplankton")
+  all_var_labels <- c("SST", "SBT", "SSS", "Phytoplankton", "Small zooplankton")
+  
+  if (identical(test_variables, "all")) {
+    variables <- all_variables
+    var_labels <- all_var_labels
+  } else {
+    invalid_vars <- test_variables[!test_variables %in% all_variables]
+    if (length(invalid_vars) > 0) {
+      stop(paste("Invalid test_variables:", paste(invalid_vars, collapse = ", ")))
+    }
+    variables <- test_variables
+    var_labels <- all_var_labels[all_variables %in% test_variables]
+  }
+  
+  # Filter data by region if specified
   if (!is.null(region_name)) {
-    # Filter CPR components by region
     cpr_region <- list(
       phyto = cpr_data$phyto %>% filter(region == region_name),
-      small = cpr_data$small %>% filter(region == region_name))
-    
-    # Filter environmental data by region
+      small = cpr_data$small %>% filter(region == region_name)
+    )
     env_region <- env_data %>% filter(Region == region_name)
-    
-    # Check if filtered data has rows
-    if (nrow(cpr_region$phyto) == 0) {
-      warning(paste("No phytoplankton data found for region:", region_name))}
-    if (nrow(cpr_region$small) == 0) {
-      warning(paste("No small zooplankton data found for region:", region_name))}
-    if (nrow(env_region) == 0) {
-      warning(paste("No environmental data found for region:", region_name))}
   } else {
-    # Use data as-is without filtering
     cpr_region <- cpr_data
     env_region <- env_data
-    region_name <- "FULL DATASET"}
+    region_name <- "FULL DATASET"
+  }
   
-  # Initialize results storage for tracking significant thresholds
-  significant_thresholds <- list(
+  # Initialize comprehensive results structure
+  results <- list(
+    # Analysis metadata
+    analysis_metadata = list(
+      region = region_name,
+      aggregation_mode = aggregation_mode,
+      test_variables = var_labels,
+      n_variables = length(variables),
+      timestamp = Sys.time()
+    ),
+    
+    # Results by mode
     autumn = list(),
     lagged = list(),
-    year = list())
+    year = list(),
+    
+    # Summary tables (NEW: compiled results)
+    summary_tables = list(
+      autumn = data.frame(),
+      lagged = data.frame(),
+      year = data.frame()
+    ),
+    
+    # Accepted thresholds
+    significant_thresholds = list(
+      autumn = list(),
+      lagged = list(),
+      year = list()
+    ),
+    
+    # Model diagnostics summary (NEW)
+    diagnostics_summary = list(
+      autumn = list(),
+      lagged = list(),
+      year = list()
+    )
+  )
   
-  # Print header
-  cat("\n", paste(rep("=", 60), collapse = ""), "\n", sep = "")
+  # Print analysis header
+  cat("\n", paste(rep("=", 60), collapse = ""), "\n")
   cat("THRESHOLD GAM ANALYSIS FOR", toupper(region_name), "\n")
-  cat(paste(rep("=", 60), collapse = ""), "\n\n", sep = "")
+  if (aggregation_mode != "all") cat("AGGREGATION MODE:", toupper(aggregation_mode), "\n")
+  if (!identical(test_variables, "all")) cat("TESTING VARIABLES:", paste(var_labels, collapse = ", "), "\n")
+  cat(paste(rep("=", 60), collapse = ""), "\n\n")
   
-  ## Autumn based analysis
-  cat("## Autumn based analysis\n")
-  
-  # Merge data for autumn
-  autumn_data <- herring_region_data %>%
-    left_join(cpr_region$phyto %>% filter(Season == "Autumn"), 
-              by = c("year" = "Year")) %>%
-    left_join(cpr_region$small %>% filter(Season == "Autumn"), 
-              by = c("year" = "Year"), suffix = c("_phyto", "_small")) %>%
-    left_join(env_region %>% filter(Season == "Autumn"), 
-              by = c("year")) %>%
-    dplyr::select(year, SSB_lag, Recruitment, Mean_SST, Mean_SBT, Mean_SSS, 
-                  phytoplankton = average_food_phyto, small_zooplankton = average_food_small)
-  
-  # Variables to test
-  variables <- c("Mean_SST", "Mean_SBT", "Mean_SSS", "phytoplankton", "small_zooplankton")
-  var_labels <- c("SST", "SBT", "SSS", "Phytoplankton", "Small zooplankton")
-  
-  # Run threshold GAM for each variable
-  for (i in seq_along(variables)) {
-    cat("### Variable:", var_labels[i], "\n")
+  # Data preparation functions
+  prepare_data <- list(
+    autumn = function() {
+      herring_region_data %>%
+        left_join(cpr_region$phyto %>% filter(Season == "Autumn"), by = c("year" = "Year")) %>%
+        left_join(cpr_region$small %>% filter(Season == "Autumn"), by = c("year" = "Year"), suffix = c("_phyto", "_small")) %>%
+        left_join(env_region %>% filter(Season == "Autumn"), by = "year") %>%
+        dplyr::select(year, SSB_lag, Recruitment, Mean_SST, Mean_SBT, Mean_SSS, 
+                      phytoplankton = average_food_phyto, small_zooplankton = average_food_small)
+    },
     
-    # Capture console output to check for significant results
-    output <- capture.output({
-      tryCatch({
-        run_threshold_gam(autumn_data, "Recruitment", "SSB_lag", variables[i], "year")
+    lagged = function() {
+      herring_region_data %>%
+        left_join(cpr_region$phyto %>% filter(Season == "Autumn") %>% mutate(Year = Year + 1), by = c("year" = "Year")) %>%
+        left_join(cpr_region$small %>% filter(Season == "Autumn") %>% mutate(Year = Year + 1), by = c("year" = "Year"), suffix = c("_phyto", "_small")) %>%
+        left_join(env_region %>% filter(Season == "Autumn") %>% mutate(year = year + 1), by = "year") %>%
+        dplyr::select(year, SSB_lag, Recruitment, Mean_SST, Mean_SBT, Mean_SSS, 
+                      phytoplankton = average_food_phyto, small_zooplankton = average_food_small)
+    },
+    
+    year = function() {
+      # Create base data step by step to avoid piping issues
+      base_data <- herring_region_data
+      
+      # Prepare phytoplankton data if available
+      phyto_summary <- NULL
+      if (!is.null(cpr_region$phyto) && nrow(cpr_region$phyto) > 0) {
+        phyto_summary <- cpr_region$phyto %>% 
+          group_by(Year) %>% 
+          summarise(phytoplankton = mean(average_food, na.rm = TRUE), .groups = 'drop')
+        base_data <- base_data %>% left_join(phyto_summary, by = c("year" = "Year"))
+      } else {
+        base_data$phytoplankton <- NA
+      }
+      
+      # Prepare small zooplankton data if available  
+      small_summary <- NULL
+      if (!is.null(cpr_region$small) && nrow(cpr_region$small) > 0) {
+        small_summary <- cpr_region$small %>% 
+          group_by(Year) %>% 
+          summarise(small_zooplankton = mean(average_food, na.rm = TRUE), .groups = 'drop')
+        base_data <- base_data %>% left_join(small_summary, by = c("year" = "Year"))
+      } else {
+        base_data$small_zooplankton <- NA
+      }
+      
+      # Prepare environmental data if available
+      env_summary <- NULL
+      if (!is.null(env_region) && nrow(env_region) > 0) {
+        env_summary <- env_region %>%
+          group_by(year) %>%
+          summarise(across(starts_with("Mean_"), ~ mean(.x, na.rm = TRUE)), .groups = 'drop')
+        base_data <- base_data %>% left_join(env_summary, by = "year")
+      } else {
+        # Add missing environmental variables as NA
+        if (!"Mean_SST" %in% names(base_data)) base_data$Mean_SST <- NA
+        if (!"Mean_SBT" %in% names(base_data)) base_data$Mean_SBT <- NA  
+        if (!"Mean_SSS" %in% names(base_data)) base_data$Mean_SSS <- NA
+      }
+      
+      # Final selection with explicit column names
+      final_data <- base_data %>%
+        dplyr::select(year, SSB_lag, Recruitment, Mean_SST, Mean_SBT, Mean_SSS, phytoplankton, small_zooplankton)
+      
+      return(final_data)
+    }
+  )
+  
+  # Main analysis function for each mode
+  run_mode_analysis <- function(mode_name) {
+    cat("## ", stringr::str_to_title(mode_name), " based analysis\n")
+    
+    analysis_data <- prepare_data[[mode_name]]()
+    mode_results <- list()
+    summary_table <- data.frame()
+    
+    for (i in seq_along(variables)) {
+      cat("### Variable:", var_labels[i], "\n")
+      
+      # Run threshold GAM analysis
+      result <- tryCatch({
+        run_threshold_gam(analysis_data, "Recruitment", "SSB_lag", variables[i], "year", debug = debug)
       }, error = function(e) {
-        cat("#### Error:", e$message, "\n")})})
+        cat("#### Error:", e$message, "\n")
+        list(
+          n = NA, edf_before = NA, edf_after = NA, p_values = NA,
+          threshold = NA, threshold_accepted = paste("Error:", e$message),
+          acceptance_criteria = list(loocv_passed = FALSE, edf_differ = FALSE, 
+                                     significant_slope = FALSE, overall_accepted = FALSE),
+          summary_row = data.frame(Variable = var_labels[i], n = NA, edf_before = NA, 
+                                   edf_after = NA, p_value_min = NA, Threshold = NA,
+                                   Threshold_accepted = paste("Error:", e$message), stringsAsFactors = FALSE)
+        )
+      })
+      
+      # Store results
+      mode_results[[var_labels[i]]] <- result
+      summary_table <- rbind(summary_table, result$summary_row)
+      
+      # Track accepted thresholds
+      if (!is.na(result$threshold_accepted) && result$threshold_accepted == "Yes") {
+        results$significant_thresholds[[mode_name]][[var_labels[i]]] <- result$threshold
+      }
+      
+      # Store diagnostics
+      results$diagnostics_summary[[mode_name]][[var_labels[i]]] <- result$acceptance_criteria
+    }
     
-    # Print the output
-    cat(output, sep = "\n")
+    # Store mode results
+    results[[mode_name]] <<- mode_results
+    results$summary_tables[[mode_name]] <<- summary_table
     
-    # Check if LOOCV result is TRUE
-    if (any(grepl("LOOCV result: TRUE", output))) {
-      # Extract Model MR value
-      mr_match <- regmatches(output, regexpr("Model MR: [0-9.]+", output))
-      if (length(mr_match) > 0) {
-        mr_value <- as.numeric(sub("Model MR: ", "", mr_match[1]))
-        significant_thresholds$autumn[[var_labels[i]]] <- mr_value}}}
+    # Print summary table
+    cat("\n")
+    print(summary_table, row.names = FALSE)
+    cat("\n")
+  }
   
-  ## Lagged autumn based analysis
-  cat("\n## Lagged autumn based analysis\n")
+  # Run analysis based on aggregation mode
+  modes_to_run <- if (aggregation_mode == "all") c("autumn", "lagged", "year") else aggregation_mode
   
-  # Merge data for lagged autumn
-  lagged_data <- herring_region_data %>%
-    left_join(cpr_region$phyto %>% filter(Season == "Autumn") %>% mutate(Year = Year + 1), 
-              by = c("year" = "Year")) %>%
-    left_join(cpr_region$small %>% filter(Season == "Autumn") %>% mutate(Year = Year + 1), 
-              by = c("year" = "Year"), suffix = c("_phyto", "_small")) %>%
-    left_join(env_region %>% filter(Season == "Autumn") %>% mutate(year = year + 1), 
-              by = c("year")) %>%
-    dplyr::select(year, SSB_lag, Recruitment, Mean_SST, Mean_SBT, Mean_SSS, 
-                  phytoplankton = average_food_phyto, small_zooplankton = average_food_small)
+  for (mode in modes_to_run) {
+    run_mode_analysis(mode)
+    if (length(modes_to_run) > 1) cat("\n")
+  }
   
-  # Run threshold GAM for each variable
-  for (i in seq_along(variables)) {
-    cat("### Variable:", var_labels[i], "\n")
-    
-    # Capture console output to check for significant results
-    output <- capture.output({
-      tryCatch({
-        run_threshold_gam(lagged_data, "Recruitment", "SSB_lag", variables[i], "year")
-      }, error = function(e) {
-        cat("#### Error:", e$message, "\n")})})
-    
-    # Print the output
-    cat(output, sep = "\n")
-    
-    # Check if LOOCV result is TRUE
-    if (any(grepl("LOOCV result: TRUE", output))) {
-      # Extract Model MR value
-      mr_match <- regmatches(output, regexpr("Model MR: [0-9.]+", output))
-      if (length(mr_match) > 0) {
-        mr_value <- as.numeric(sub("Model MR: ", "", mr_match[1]))
-        significant_thresholds$lagged[[var_labels[i]]] <- mr_value}}}
-  
-  ## Year based analysis
-  cat("\n## Year based analysis\n")
-  
-  # Merge data for yearly analysis
-  year_data <- herring_region_data %>%
-    left_join(cpr_region$phyto %>% 
-                group_by(Year) %>% 
-                summarise(phytoplankton = mean(average_food, na.rm = TRUE), .groups = 'drop'), 
-              by = c("year" = "Year")) %>%
-    left_join(cpr_region$small %>% 
-                group_by(Year) %>% 
-                summarise(small_zooplankton = mean(average_food, na.rm = TRUE), .groups = 'drop'), 
-              by = c("year" = "Year")) %>%
-    left_join(env_region %>%
-                group_by(year) %>%
-                summarise(across(starts_with("Mean_"), mean, na.rm = TRUE), .groups = 'drop'),
-              by = "year") %>%
-    dplyr::select(year, SSB_lag, Recruitment, Mean_SST, Mean_SBT, Mean_SSS, 
-                  phytoplankton, small_zooplankton)
-  
-  # Run threshold GAM for each variable
-  for (i in seq_along(variables)) {
-    cat("### Variable:", var_labels[i], "\n")
-    
-    # Capture console output to check for significant results
-    output <- capture.output({
-      tryCatch({
-        run_threshold_gam(year_data, "Recruitment", "SSB_lag", variables[i], "year")
-      }, error = function(e) {
-        cat("#### Error:", e$message, "\n")})})
-    
-    # Print the output
-    cat(output, sep = "\n")
-    
-    # Check if LOOCV result is TRUE
-    if (any(grepl("LOOCV result: TRUE", output))) {
-      # Extract Model MR value
-      mr_match <- regmatches(output, regexpr("Model MR: [0-9.]+", output))
-      if (length(mr_match) > 0) {
-        mr_value <- as.numeric(sub("Model MR: ", "", mr_match[1]))
-        significant_thresholds$year[[var_labels[i]]] <- mr_value}}}
-  
-  # Summary of significant thresholds
-  cat("\n", paste(rep("-", 60), collapse = ""), "\n", sep = "")
-  cat("SUMMARY OF SIGNIFICANT THRESHOLDS (LOOCV = TRUE):\n")
-  cat(paste(rep("-", 60), collapse = ""), "\n", sep = "")
+  # Print summary of accepted thresholds
+  cat(paste(rep("-", 60), collapse = ""), "\n")
+  cat("SUMMARY OF ACCEPTED THRESHOLDS:\n")
+  cat(paste(rep("-", 60), collapse = ""), "\n")
   
   significant_found <- FALSE
+  for (mode in modes_to_run) {
+    if (length(results$significant_thresholds[[mode]]) > 0) {
+      for (var in names(results$significant_thresholds[[mode]])) {
+        cat(sprintf("- %s: %s (Threshold: %.1f)\n", 
+                    stringr::str_to_title(mode), var, results$significant_thresholds[[mode]][[var]]))
+        significant_found <- TRUE
+      }
+    }
+  }
   
-  # Check autumn results
-  if (length(significant_thresholds$autumn) > 0) {
-    for (var in names(significant_thresholds$autumn)) {
-      cat(sprintf("- Autumn based: %s (Model MR: %.2f)\n", var, significant_thresholds$autumn[[var]]))
-      significant_found <- TRUE}}
+  if (!significant_found) cat("No temperature thresholds accepted.\n")
   
-  # Check lagged results
-  if (length(significant_thresholds$lagged) > 0) {
-    for (var in names(significant_thresholds$lagged)) {
-      cat(sprintf("- Lagged autumn based: %s (Model MR: %.2f)\n", var, significant_thresholds$lagged[[var]]))
-      significant_found <- TRUE}}
+  # Add overall summary statistics (NEW)
+  results$overall_summary <- list(
+    total_analyses = length(variables) * length(modes_to_run),
+    total_accepted = sum(sapply(results$significant_thresholds[modes_to_run], length)),
+    acceptance_rate = round(sum(sapply(results$significant_thresholds[modes_to_run], length)) / 
+                              (length(variables) * length(modes_to_run)) * 100, 1),
+    modes_analyzed = modes_to_run,
+    variables_tested = var_labels
+  )
   
-  # Check year results
-  if (length(significant_thresholds$year) > 0) {
-    for (var in names(significant_thresholds$year)) {
-      cat(sprintf("- Year based: %s (Model MR: %.2f)\n", var, significant_thresholds$year[[var]]))
-      significant_found <- TRUE}}
+  return(results)
+}
+
+#--------------------------------------------------------------------------------------
+## Enhanced GCV Plotting Functions
+#--------------------------------------------------------------------------------------
+
+plot_gcv_threshold <- function(result, variable_name, mode_name = "") {
+  if (is.null(result$gcv_data)) {
+    cat("No GCV data available for", variable_name, "\n")
+    return(NULL)
+  }
   
-  if (!significant_found) {
-    cat("No significant thresholds found.\n")}
+  gcv_data <- result$gcv_data
   
-  # Return significant thresholds invisibly
-  invisible(significant_thresholds)}
+  plot(gcv_data$threshold_values, gcv_data$gcv_values,
+       type = "l", xlab = paste(variable_name, "Threshold"), ylab = "GCV Values",
+       main = paste("GCV Plot for", variable_name, mode_name),
+       col = "blue", lwd = 2)
+  
+  abline(v = gcv_data$selected_threshold, col = "red", lty = 2, lwd = 2)
+  text(x = gcv_data$selected_threshold, y = max(gcv_data$gcv_values, na.rm = TRUE) * 0.9,
+       labels = paste("Threshold:", round(gcv_data$selected_threshold, 2)), pos = 4, col = "red")
+  grid()
+  
+  # Valley assessment
+  min_gcv_idx <- which.min(gcv_data$gcv_values)
+  threshold_idx <- which.min(abs(gcv_data$threshold_values - gcv_data$selected_threshold))
+  valley_assessment <- if (abs(min_gcv_idx - threshold_idx) <= 2) "DEEP VALLEY CONFIRMED" else "NO CLEAR VALLEY"
+  
+  mtext(valley_assessment, side = 3, line = 0.5, 
+        col = if(valley_assessment == "DEEP VALLEY CONFIRMED") "green" else "orange")
+  
+  return(valley_assessment)
+}
+
+plot_all_gcv_thresholds <- function(analysis_results, aggregation_mode = "autumn") {
+  if (!aggregation_mode %in% names(analysis_results)) {
+    cat("No results found for aggregation mode:", aggregation_mode, "\n")
+    return(NULL)
+  }
+  
+  mode_results <- analysis_results[[aggregation_mode]]
+  n_vars <- length(mode_results)
+  
+  if (n_vars > 1) par(mfrow = c(ceiling(n_vars/2), 2), mar = c(4, 4, 3, 1))
+  
+  valley_assessments <- list()
+  for (var_name in names(mode_results)) {
+    result <- mode_results[[var_name]]
+    valley_assessments[[var_name]] <- plot_gcv_threshold(result, var_name, paste("(", aggregation_mode, ")"))
+  }
+  
+  if (n_vars > 1) par(mfrow = c(1, 1))
+  
+  cat("\nGCV Valley Assessment Summary for", toupper(aggregation_mode), ":\n")
+  cat(paste(rep("-", 50), collapse = ""), "\n")
+  for (var in names(valley_assessments)) {
+    if (!is.null(valley_assessments[[var]])) {
+      cat(sprintf("%-20s: %s\n", var, valley_assessments[[var]]))
+    }
+  }
+  
+  return(valley_assessments)
+}
+
+#--------------------------------------------------------------------------------------
+## Enhanced Summary Functions (NEW)
+#--------------------------------------------------------------------------------------
+
+# Extract comprehensive summary from analysis results
+get_analysis_summary <- function(analysis_results) {
+  summary_list <- list(
+    metadata = analysis_results$analysis_metadata,
+    overall = analysis_results$overall_summary,
+    by_mode = list(),
+    combined_summary_table = data.frame()
+  )
+  
+  # Compile results by mode
+  for (mode in c("autumn", "lagged", "year")) {
+    if (length(analysis_results[[mode]]) > 0) {
+      summary_list$by_mode[[mode]] <- list(
+        summary_table = analysis_results$summary_tables[[mode]],
+        accepted_thresholds = analysis_results$significant_thresholds[[mode]],
+        diagnostics = analysis_results$diagnostics_summary[[mode]]
+      )
+      
+      # Add mode column to summary table for combined view
+      mode_table <- analysis_results$summary_tables[[mode]]
+      if (nrow(mode_table) > 0) {
+        mode_table$Mode <- mode
+        summary_list$combined_summary_table <- rbind(summary_list$combined_summary_table, mode_table)
+      }
+    }
+  }
+  
+  return(summary_list)
+}
+
+# Print formatted analysis summary
+print_analysis_summary <- function(analysis_results) {
+  summary <- get_analysis_summary(analysis_results)
+  
+  cat("\n", paste(rep("=", 60), collapse = ""), "\n")
+  cat("COMPREHENSIVE ANALYSIS SUMMARY\n")
+  cat(paste(rep("=", 60), collapse = ""), "\n")
+  
+  cat("Region:", summary$metadata$region, "\n")
+  cat("Variables tested:", paste(summary$metadata$test_variables, collapse = ", "), "\n")
+  cat("Total analyses:", summary$overall$total_analyses, "\n")
+  cat("Accepted thresholds:", summary$overall$total_accepted, "\n")
+  cat("Success rate:", summary$overall$acceptance_rate, "%\n\n")
+  
+  if (nrow(summary$combined_summary_table) > 0) {
+    cat("COMBINED RESULTS TABLE:\n")
+    print(summary$combined_summary_table, row.names = FALSE)
+  }
+  
+  return(invisible(summary))
+}
