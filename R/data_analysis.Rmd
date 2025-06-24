@@ -234,20 +234,15 @@ ggsave(filename = file.path("plots/", "SRR_full.png"),
 ```{r}
 ### Load env and cpr data
 load("data/env_df_full.Rdata")
-load("data/cpr_full.Rdata")
 
 ### Call "run_threshold_analysis" from functions and extract results (below)
-results_tgam <- run_threshold_analysis(Herring_full, cpr_full, env_df_full, 
+results_tgam <- run_threshold_analysis(Herring_full, env_df_full, 
                        aggregation_mode = "year", 
-                       test_variables = c("Mean_SST", "Mean_SBT", "Mean_SSS"))
+                       test_variables = c("Mean_SST", "Mean_SSS"))
 
-#  Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
-#  Mean_SST 31      0.667     0.721    1.19e-09      10.5    No tGAM (LOOCV)
-#  Mean_SBT 31      0.667     0.619    2.31e-05       8.6    No tGAM (LOOCV)
-#  Mean_SSS 31      0.667     0.000    5.64e-08      34.4    No tGAM (LOOCV)
+#   Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
+#   Mean_SST 64      0.667     0.993    4.51e-14      10.4    No tGAM (LOOCV)
+#   Mean_SSS 64      0.667     0.000    2.56e-23      34.1    No tGAM (LOOCV)
 
-#### no threshold accepted
-
-### If valid Look at GCV minimum
-#plot_gcv_threshold(results_tgam$autumn$SST, "SST", "(Autumn)")
+#### no threshold accepted.
 ```

@@ -18,49 +18,34 @@ various sources. The data was received in May / June 2025.
     -   DOI: <https://doi.org/10.17031/6847e7193af55>
 
 -   **NS SST Monthly.nc** was fetched from the Copernicus Marine MyOcean
-    platform. It contains SST data of the North Sea interpolated with
-    the NEMO model.
+    platform. It contains SST In-situ observation data of the North Sea from the CORA program.
 
     -   Type: SST on a monthly scale
 
     -   Coverage: North Sea
 
-    -   Time Range 01.1993 to 01.2024
+    -   Time Range 01.1960 to 06.2024
 
-    -   Resolution: 0.111° x 0.067°
+    -   Resolution: 0.5° x 0.5°
 
-    -   Link:
-        <https://data.marine.copernicus.eu/viewer/expert?view=dataset&dataset=NWSHELF_MULTIYEAR_PHY_004_009>
+    -   DOI: https://doi.org/10.17882/46219
 
--   **NS SBT Monthly.nc** was fetched from the Copernicus Marine MyOcean
-    platform. It contains SBT data of the North Sea interpolated with
-    the NEMO model.
-
-    -   Type: Sea Bottom Temperature (SBT) on a monthly scale
-
-    -   Coverage: North Sea
-
-    -   Time Range 01.1993 to 01.2024
-
-    -   Resolution: 0.111° x 0.067°
-
-    -   Link:
-        <https://data.marine.copernicus.eu/viewer/expert?view=dataset&dataset=NWSHELF_MULTIYEAR_PHY_004_009>
+    -   Link: https://data.marine.copernicus.eu/viewer/expert?view=dataset&dataset=INSITU_GLO_PHY_TS_OA_MY_013_052
 
 -   **NS SSS Monthly.nc** was fetched from the Copernicus Marine MyOcean
-    platform. It contains SSS data of the North Sea interpolated with
-    the NEMO model.
+    platform. It contains SSS In-situ observation data of the North Sea from the CORA program.
 
     -   Type: Sea Surface Salinity (SSS) on a monthly scale
 
     -   Coverage: North Sea
 
-    -   Time Range 01.1993 to 01.2024
+    -   Time Range 01.1960 to 06.2024
 
-    -   Resolution: 0.111° x 0.067°
+    -   Resolution: 0.5° x 0.5°
 
-    -   Link:
-        <https://data.marine.copernicus.eu/viewer/expert?view=dataset&dataset=NWSHELF_MULTIYEAR_PHY_004_009>
+    -   DOI: https://doi.org/10.17882/46219
+
+    -   Link: https://data.marine.copernicus.eu/viewer/expert?view=dataset&dataset=INSITU_GLO_PHY_TS_OA_MY_013_052
 
 -   **NSAS LAI.txt** contains Larva Abundance Index data for the North
     Sea Herring (*Clupea Harengus*). It was received from Niels T.

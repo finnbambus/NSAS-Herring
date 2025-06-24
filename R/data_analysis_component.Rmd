@@ -621,73 +621,100 @@ ggsave(filename = file.path("plots/", "SRR_components.png"),
 ```{r}
 ### Load env and cpr data
 load("data/env_df_subset.Rdata")
-load("data/cpr_component.Rdata")
 
 ### Call "run_threshold_analysis" from functions and extract results (below)
 results_tgam <- list()
 #### SHOR
 results_tgam$SHOR <- run_threshold_analysis(Herring$SHOR, 
-                                            cpr_component, 
                                             env_df_subset, 
                                             region_name = "Shetland_Orkney",
                                             aggregation_mode = "autumn", 
-                                            test_variables = c("Mean_SST", "Mean_SBT", "Mean_SSS"))
+                                            test_variables = c("Mean_SST", "Mean_SSS"))
 
-#  Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
-#  Mean_SST 31      0.667     0.799       0.043      11.6    No tGAM (LOOCV)
-#  Mean_SBT 31      0.667     0.713       0.018      10.0    No tGAM (LOOCV)
-#  Mean_SSS 31      0.667     0.614       0.004      35.1    No tGAM (LOOCV)
+#   Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
+#   Mean_SST 52      0.667     0.237       0.097      11.0    No tGAM (LOOCV)
+#   Mean_SSS 52      0.667     0.000       0.219      35.1    No tGAM (LOOCV)
+
+#### no threshold accepted.
 
 #---------------------------------------------------------------------
 
 #### Buchan
 results_tgam$Buchan <- run_threshold_analysis(Herring$Buchan, 
-                                            cpr_component, 
                                             env_df_subset, 
                                             region_name = "Buchan",
                                             aggregation_mode = "autumn", 
-                                            test_variables = c("Mean_SST", "Mean_SBT", "Mean_SSS"))
+                                            test_variables = c("Mean_SST", "Mean_SSS"))
 
-#  Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
-#  Mean_SST 31      0.667     0.984    4.91e-05      11.7                Yes
-#  Mean_SBT 31      0.667     0.000    9.15e-06      10.0    No tGAM (LOOCV)
-#  Mean_SSS 31      0.667     0.000    1.28e-04      34.7    No tGAM (LOOCV)
+#   Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
+#   Mean_SST 52      0.667     0.754    6.12e-04      11.2    No tGAM (LOOCV)
+#   Mean_SSS 52      0.667     0.924       0.002      34.8    No tGAM (LOOCV)
 
-png(filename = "plots/GCV_SST_Buchan.png", width = 1500, height = 1000, res = 300)
-plot_gcv_Buchan_SST <- plot_gcv_threshold(results_tgam$Buchan$autumn$SST, "SST", "(Autumn)")
-dev.off()
+#### no threshold accepted.
 
 #---------------------------------------------------------------------
 
 #### Banks
 results_tgam$Banks <- run_threshold_analysis(Herring$Banks, 
-                                            cpr_component, 
                                             env_df_subset, 
                                             region_name = "Banks",
                                             aggregation_mode = "autumn", 
-                                            test_variables = c("Mean_SST", "Mean_SBT", "Mean_SSS"))
+                                            test_variables = c("Mean_SST", "Mean_SSS"))
 
-#  Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
-#  Mean_SST 31      0.667         0    1.73e-09      12.3    No tGAM (LOOCV)
-#  Mean_SBT 31      0.667         0    2.19e-08      11.3    No tGAM (LOOCV)
-#  Mean_SSS 31      0.667         0    3.18e-13      34.4    No tGAM (LOOCV)
+#   Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
+#   Mean_SST 52      0.667     0.939    2.86e-07      12.1                Yes
+#   Mean_SSS 52      0.667     0.000    8.56e-09      34.5    No tGAM (LOOCV)
+
+#### SST threshold accepted.
+
+png(filename = "plots/tGAM/SST_Banks.png", width = 1500, height = 1000, res = 300)
+plot_gcv_Banks_SST <- plot_gcv_threshold(results_tgam$Banks$autumn$SST, "SST", "(Autumn)")
+dev.off()
+
+#### Threshold confirmed by gcv valley
+
+#---------------------------------------------------------------------
 
 #### Downs
 results_tgam$Downs <- run_threshold_analysis(Herring$Downs, 
-                                            cpr_component, 
                                             env_df_subset, 
                                             region_name = "Downs",
                                             aggregation_mode = "autumn", 
-                                            test_variables = c("Mean_SST", "Mean_SBT", "Mean_SSS"))
+                                            test_variables = c("Mean_SST", "Mean_SSS"))
 
-#  Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
-#  Mean_SST 31      0.667         0    3.98e-10      15.3    No tGAM (LOOCV)
-#  Mean_SBT 31      0.667         0    3.98e-10      15.3    No tGAM (LOOCV)
-#  Mean_SSS 31      0.667         0    3.83e-15      34.3    No tGAM (LOOCV)
+#   Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
+#   Mean_SST 52      0.667     0.901    3.12e-04      14.4    No tGAM (LOOCV)
+#   Mean_SSS 52      0.667     0.956       0.803      33.8    No tGAM (LOOCV)
+
+#### no threshold accepted.
 ```
 
-### save plot
+## Plot
 
 ```{r}
+### Prep data for plotting
+tgam_input <- Herring$Banks %>%
+  dplyr::select(year, SSB_component, Recruitment) %>%
+  left_join(
+    env_df_subset %>%
+      filter(Region == "Banks", Season == "Autumn") %>%
+      dplyr::select(year, Mean_SST),
+    by = "year"
+  ) %>%
+  drop_na() %>%
+  mutate(SSB_lag = lag(SSB_component, n = 3)) %>%
+  drop_na() %>%
+  arrange(SSB_lag) %>%
+  rename(Year = year, SSB = SSB_component)
 
+### Plot using "plot_tgam" from funtions
+plot_tgam_banks <- plot_tgam_complete(tgam_input, threshold = 12.1)
+
+### save plot
+ggsave(filename = file.path("plots/tGAM", "Banks_SST.png"),
+       plot = plot_tgam_banks,
+       bg = "white",
+       width = 15,
+       height = 10,
+       dpi = 300)
 ```

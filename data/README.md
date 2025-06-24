@@ -2,8 +2,7 @@ The “data” folder contains the .Rdata files used for analysis. The files
 are processed data from the “data raw” folder by the code in the
 “data\_cleanup.Rmd” file of the “R” folder.
 
--   **env\_** contains environmental (Sea-Surface-Temperature,
-    Sea-Bottom-Temperature & Sea-Surface-Salinity) data including the
+-   **env\_** contains environmental (Sea-Surface-Temperature & Sea-Surface-Salinity) data including the
     dimensions longitude, latitude, years, months & dates.
     -   Variations: full (data for the entire North Sea), subset (data
         subset and limited into spawning components (Shetland / Orkneys,
@@ -11,9 +10,9 @@ are processed data from the “data raw” folder by the code in the
         -   **df**\_ contains the data compressed to 2D (spatial mean,
             yearly mean) and saved as a data frames.
     -   Type: List
-    -   Variables: SST \[°C\], SBT \[°C\], SSS \[PSU\], lon \[° long\],
+    -   Variables: SST \[°C\], SSS \[PSU\], lon \[° long\],
         lat \[° lat\], years, months & dates
-        -   Region, year, mean\_SST \[°C\], mean\_SBT \[°C\], mean\_SSS
+        -   Region, year, Mean\_SST \[°C\], Mean\_SSS
             \[PSU\]
 -   **LAI\_full** contains the LAI data for each component and fortnight
     -   Type: Data frame

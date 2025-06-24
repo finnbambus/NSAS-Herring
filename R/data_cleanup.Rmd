@@ -92,15 +92,20 @@ Herring_LAI <- Herring_full %>%
 ### Load functions from "functions.R"
 source("R/functions.R")
 
-### Call load_enironment_data" from functions and store in environment
-env_data_full <- load_environmental_data("data raw/NS SST Monthly.nc", "data raw/NS SBT Monthly.nc", "data raw/NS SSS Monthly.nc")
+### Call "load_enironment_data" from functions and store in environment
+env_data_full <- load_environmental_data(
+  sst_file = "data raw/NS SST Monthly.nc", 
+  sss_file = "data raw/NS SSS Monthly.nc")
 
 ### Call process_env_data and save as data frame for full stock
 #### Full Stock
-env_df_full <- process_env_data_seasonal(env_data_full)
+env_df_full <- process_env_data_seasonal(env_data_full, include_sbt = FALSE)
 
 #### Components
-env_df_subset <- process_env_data_seasonal(env_data_full, shapefile_path = "data raw/components_shp/components.shp", polygon_id_column = "component")
+env_df_subset <- process_env_data_seasonal(env_data_full, 
+                                           shapefile_path = "data raw/components_shp/components.shp", 
+                                           polygon_id_column = "component",
+                                           include_sbt = FALSE)
 
 ### Clear large data
 env_data_full <- NULL
@@ -200,9 +205,17 @@ env_df_subset$Region <- factor(env_df_subset$Region,
 ### Call "plot_env_data"
 plot_env_grid <- plot_env_data_dual(env_df_full, env_df_subset,
                                     cpr_full_data = cpr_full, 
-                                    cpr_component_data = cpr_component)
+                                    cpr_component_data = cpr_component,
+                                    threshold_values = threshold_values)
 
 print(plot_env_grid)
+
+
+threshold_values <- list(
+  "Banks" = 12.1  # Your calculated threshold for Banks
+  # "Scotian Shelf" = 11.8,  # Add other thresholds if you have them
+  # "Georges Bank" = 12.5    # Add other thresholds if you have them
+)
 ```
 
 # Save data and plots
