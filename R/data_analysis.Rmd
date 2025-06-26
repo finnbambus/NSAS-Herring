@@ -232,17 +232,58 @@ ggsave(filename = file.path("plots/", "SRR_full.png"),
 # tGAM
 
 ```{r}
-### Load env and cpr data
+### Load env data
 load("data/env_df_full.Rdata")
 
 ### Call "run_threshold_analysis" from functions and extract results (below)
 results_tgam <- run_threshold_analysis(Herring_full, env_df_full, 
-                       aggregation_mode = "year", 
+                       aggregation_mode = "all", 
                        test_variables = c("Mean_SST", "Mean_SSS"))
 
+# results_tgam[["summary_tables"]][["year"]]
 #   Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
 #   Mean_SST 64      0.667     0.993    4.51e-14      10.4    No tGAM (LOOCV)
 #   Mean_SSS 64      0.667     0.000    2.56e-23      34.1    No tGAM (LOOCV)
 
-#### no threshold accepted.
+# results_tgam[["summary_tables"]][["winter"]]
+#   Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
+#   Mean_SST 64      0.667     0.989    4.29e-11       7.1    No tGAM (LOOCV)
+#   Mean_SSS 64      0.667     0.000    6.66e-21      34.3                Yes
+
+#### SSS threshold accepted for larval overwintering.
+
+png(filename = "plots/tGAM/SSS_Full_larv.png", width = 1500, height = 1000, res = 300)
+plot_gcv_Banks_SST_autumn <- plot_gcv_threshold(results_tgam$winter$SSS, "SSS-Full Stock", "(Winter)")
+dev.off()
+#### Threshold confirmed by gcv valley.
+```
+
+## Plotting
+
+```{r}
+### Prep data for plotting
+tgam_input <- Herring_full %>%
+  dplyr::select(year, SSB, Recruitment) %>%
+  left_join(
+    env_df_full %>%
+      filter(Season == "Winter") %>%
+      dplyr::select(year, Mean_SSS),
+    by = "year"
+  ) %>%
+  drop_na() %>%
+  mutate(SSB_lag = lag(SSB, n = 3)) %>%
+  drop_na() %>%
+  arrange(SSB_lag) %>%
+  rename(Year = year)
+
+### Plot using "plot_tgam" from funtions
+plot_tgam_full_larv <- plot_tgam_complete(tgam_input, threshold = 34.3, env_var = "Mean_SSS")
+
+### save plot
+ggsave(filename = file.path("plots/tGAM", "Full_SSS_larv.png"),
+       plot = plot_tgam_full_larv,
+       bg = "white",
+       width = 15,
+       height = 10,
+       dpi = 300)
 ```

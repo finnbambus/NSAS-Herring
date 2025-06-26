@@ -619,8 +619,9 @@ ggsave(filename = file.path("plots/", "SRR_components.png"),
 # tGAM
 
 ```{r}
-### Load env and cpr data
+### Load env data
 load("data/env_df_subset.Rdata")
+load("data/env_df_full.Rdata")
 
 ### Call "run_threshold_analysis" from functions and extract results (below)
 results_tgam <- list()
@@ -631,9 +632,20 @@ results_tgam$SHOR <- run_threshold_analysis(Herring$SHOR,
                                             aggregation_mode = "autumn", 
                                             test_variables = c("Mean_SST", "Mean_SSS"))
 
+results_tgam$SHOR_larv <- run_threshold_analysis(Herring$SHOR, 
+                                            env_df_full,
+                                            aggregation_mode = "winter", 
+                                            test_variables = c("Mean_SST", "Mean_SSS"))
+
+# results_tgam[["SHOR"]][["summary_tables"]][["autumn"]]
 #   Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
 #   Mean_SST 52      0.667     0.237       0.097      11.0    No tGAM (LOOCV)
 #   Mean_SSS 52      0.667     0.000       0.219      35.1    No tGAM (LOOCV)
+
+# results_tgam[["SHOR_larv"]][["summary_tables"]][["winter"]]
+#   Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
+#   Mean_SST 52      0.667     0.991       0.052       7.7    No tGAM (LOOCV)
+#   Mean_SSS 52      0.667     0.000       0.030      34.3    No tGAM (LOOCV)
 
 #### no threshold accepted.
 
@@ -646,9 +658,20 @@ results_tgam$Buchan <- run_threshold_analysis(Herring$Buchan,
                                             aggregation_mode = "autumn", 
                                             test_variables = c("Mean_SST", "Mean_SSS"))
 
+results_tgam$Buchan_larv <- run_threshold_analysis(Herring$Buchan, 
+                                            env_df_full,
+                                            aggregation_mode = "winter", 
+                                            test_variables = c("Mean_SST", "Mean_SSS"))
+
+# results_tgam[["Buchan"]][["summary_tables"]][["autumn"]]
 #   Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
 #   Mean_SST 52      0.667     0.754    6.12e-04      11.2    No tGAM (LOOCV)
 #   Mean_SSS 52      0.667     0.924       0.002      34.8    No tGAM (LOOCV)
+
+# results_tgam[["Buchan_larv"]][["summary_tables"]][["winter"]]
+#   Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
+#   Mean_SST 52      0.667     0.000    1.30e-17       7.1    No tGAM (LOOCV)
+#   Mean_SSS 52      0.667     0.384    4.55e-06      34.4    No tGAM (LOOCV)
 
 #### no threshold accepted.
 
@@ -661,17 +684,28 @@ results_tgam$Banks <- run_threshold_analysis(Herring$Banks,
                                             aggregation_mode = "autumn", 
                                             test_variables = c("Mean_SST", "Mean_SSS"))
 
+results_tgam$Banks_larv <- run_threshold_analysis(Herring$Banks, 
+                                            env_df_full,
+                                            aggregation_mode = "winter", 
+                                            test_variables = c("Mean_SST", "Mean_SSS"))
+
+# results_tgam[["Banks"]][["summary_tables"]][["autumn"]]
 #   Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
 #   Mean_SST 52      0.667     0.939    2.86e-07      12.1                Yes
 #   Mean_SSS 52      0.667     0.000    8.56e-09      34.5    No tGAM (LOOCV)
 
-#### SST threshold accepted.
+# results_tgam[["Banks_larv"]][["summary_tables"]][["winter"]]
+#   Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
+#   Mean_SST 52      0.667     0.912    8.66e-08       7.2    No tGAM (LOOCV)
+#   Mean_SSS 52      0.667     0.995    1.90e-10      34.4    No tGAM (LOOCV)
 
-png(filename = "plots/tGAM/SST_Banks.png", width = 1500, height = 1000, res = 300)
-plot_gcv_Banks_SST <- plot_gcv_threshold(results_tgam$Banks$autumn$SST, "SST", "(Autumn)")
+#### SST threshold accepted for autumn.
+
+png(filename = "plots/tGAM/SST_Banks_autumn.png", width = 1500, height = 1000, res = 300)
+plot_gcv_Banks_SST_autumn <- plot_gcv_threshold(results_tgam$Banks$autumn$SST, "SST-Banks", "(Autumn)")
 dev.off()
 
-#### Threshold confirmed by gcv valley
+#### Threshold confirmed by gcv valley.
 
 #---------------------------------------------------------------------
 
@@ -682,11 +716,22 @@ results_tgam$Downs <- run_threshold_analysis(Herring$Downs,
                                             aggregation_mode = "autumn", 
                                             test_variables = c("Mean_SST", "Mean_SSS"))
 
+results_tgam$Downs_larv <- run_threshold_analysis(Herring$Downs, 
+                                            env_df_full,
+                                            aggregation_mode = "winter", 
+                                            test_variables = c("Mean_SST", "Mean_SSS"))
+
+# results_tgam[["Downs"]][["summary_tables"]][["autumn"]]
 #   Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
 #   Mean_SST 52      0.667     0.901    3.12e-04      14.4    No tGAM (LOOCV)
 #   Mean_SSS 52      0.667     0.956       0.803      33.8    No tGAM (LOOCV)
 
-#### no threshold accepted.
+# results_tgam[["Downs_larv"]][["summary_tables"]][["winter"]]
+#   Variable  n edf_before edf_after p_value_min Threshold Threshold_accepted
+#   Mean_SST 52      0.667     0.759    3.88e-05       7.7    No tGAM (LOOCV)
+#   Mean_SSS 52      0.667     0.986    9.05e-07      34.4    No tGAM (LOOCV)
+
+####  no threshold accepted.
 ```
 
 ## Plot
@@ -708,7 +753,7 @@ tgam_input <- Herring$Banks %>%
   rename(Year = year, SSB = SSB_component)
 
 ### Plot using "plot_tgam" from funtions
-plot_tgam_banks <- plot_tgam_complete(tgam_input, threshold = 12.1)
+plot_tgam_banks <- plot_tgam_complete(tgam_input, threshold = 12.1, env_var = "Mean_SST")
 
 ### save plot
 ggsave(filename = file.path("plots/tGAM", "Banks_SST.png"),

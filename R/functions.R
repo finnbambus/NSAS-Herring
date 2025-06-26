@@ -2113,7 +2113,7 @@ run_threshold_analysis <- function(herring_region_data,
                                    debug = FALSE) {
   
   # Validate inputs
-  valid_modes <- c("all", "autumn", "lagged", "year")
+  valid_modes <- c("all", "autumn", "winter", "year")
   if (!aggregation_mode %in% valid_modes) {
     stop(paste("Invalid aggregation_mode. Must be one of:", paste(valid_modes, collapse = ", ")))}
   
@@ -2163,25 +2163,25 @@ run_threshold_analysis <- function(herring_region_data,
     
     # Results by mode
     autumn = list(),
-    lagged = list(),
+    winter = list(),
     year = list(),
     
     # Summary tables
     summary_tables = list(
       autumn = data.frame(),
-      lagged = data.frame(),
+      winter = data.frame(),
       year = data.frame()),
     
     # Accepted thresholds
     significant_thresholds = list(
       autumn = list(),
-      lagged = list(),
+      winter = list(),
       year = list()),
     
     # Model diagnostics summary
     diagnostics_summary = list(
       autumn = list(),
-      lagged = list(),
+      winter = list(),
       year = list()))
   
   # Print analysis header
@@ -2235,17 +2235,15 @@ run_threshold_analysis <- function(herring_region_data,
       return(final_data[, required_cols, drop = FALSE])
     },
     
-    lagged = function() {
+    winter = function() {
       # Create base dataset with herring data
       base_data <- herring_region_data
       
-      # Join environmental data (autumn, lagged by +1 year)
-      env_autumn_lagged <- env_region %>% 
-        filter(Season == "Autumn") %>% 
-        mutate(year = year + 1)
+      # Join environmental data (winter only)
+      env_winter <- env_region %>% filter(Season == "Winter")
       
-      if (nrow(env_autumn_lagged) > 0) {
-        base_data <- base_data %>% left_join(env_autumn_lagged, by = "year")
+      if (nrow(env_winter) > 0) {
+        base_data <- base_data %>% left_join(env_winter, by = "year")
       } else {
         # Add missing environmental variables as NA
         for (var in all_variables) {
@@ -2360,7 +2358,7 @@ run_threshold_analysis <- function(herring_region_data,
     cat("\n")}
   
   # Run analysis based on aggregation mode
-  modes_to_run <- if (aggregation_mode == "all") c("autumn", "lagged", "year") else aggregation_mode
+  modes_to_run <- if (aggregation_mode == "all") c("autumn", "winter", "year") else aggregation_mode
   
   for (mode in modes_to_run) {
     run_mode_analysis(mode)
@@ -2392,7 +2390,6 @@ run_threshold_analysis <- function(herring_region_data,
     include_sbt = include_sbt)
   
   return(results)}
-
 
 #--------------------------------------------------------------------------------------
 ## Enhanced GCV Plotting Functions
@@ -2522,12 +2519,24 @@ print_analysis_summary <- function(analysis_results) {
 
 plot_tgam_complete <- function(processed_data, 
                                threshold,
+                               env_var = "Mean_SST",  # New parameter: "Mean_SST" or "Mean_SSS"
                                scale_factor = 1000000) {
+  
+  # Validate environmental variable parameter
+  valid_vars <- c("Mean_SST", "Mean_SSS")
+  if (!env_var %in% valid_vars) {
+    stop(paste("env_var must be one of:", paste(valid_vars, collapse = ", ")))
+  }
+  
+  # Check if the specified environmental variable exists in the data
+  if (!env_var %in% names(processed_data)) {
+    stop(paste("Column", env_var, "not found in processed_data"))
+  }
   
   # Set up variables for threshold GAM
   y <- processed_data$Recruitment
   x <- processed_data$SSB_lag
-  x2 <- processed_data$Mean_SST
+  x2 <- processed_data[[env_var]]  # Use the specified environmental variable
   
   # Remove any rows with missing values to ensure vectors are same length
   complete_cases <- complete.cases(y, x, x2)
@@ -2553,25 +2562,50 @@ plot_tgam_complete <- function(processed_data,
     b = 0.8
   )
   
+  # Create threshold category variable with appropriate naming
+  threshold_var_name <- paste0(env_var, "_threshold")
+  low_category <- if (env_var == "Mean_SST") "low_temp" else "low_salinity"
+  high_category <- if (env_var == "Mean_SST") "high_temp" else "high_salinity"
+  
   # Add predictions to processed data
   final_data <- processed_data[complete_cases, ] %>%
     mutate(
       tgam_pred = predict(tmod),
-      tgam_ab = ifelse(Mean_SST <= threshold, "low_temp", "high_temp")
+      tgam_ab = ifelse(.data[[env_var]] <= threshold, low_category, high_category)
     )
+  
+  # Create labels for legend and axes
+  legend_labels <- if (env_var == "Mean_SST") {
+    c("Below Threshold", "Above Threshold")
+  } else {
+    c("Below Threshold", "Above Threshold")
+  }
+  
+  legend_name <- if (env_var == "Mean_SST") {
+    "SST Category"
+  } else {
+    "SSS Category"
+  }
+  
+  color_values <- if (env_var == "Mean_SST") {
+    c("low_temp" = "red", "high_temp" = "blue")
+  } else {
+    c("low_salinity" = "red", "high_salinity" = "blue")
+  }
   
   # Create and return plot
   final_data %>%
     ggplot(aes(x = SSB_lag/scale_factor, y = Recruitment/scale_factor)) +
-    geom_point(data = . %>% filter(tgam_ab == "low_temp"), col = "red", size = 2) +
-    geom_point(data = . %>% filter(tgam_ab == "high_temp"), col = "blue", size = 2) +
+    geom_point(data = . %>% filter(tgam_ab == low_category), col = "red", size = 2) +
+    geom_point(data = . %>% filter(tgam_ab == high_category), col = "blue", size = 2) +
     geom_smooth(data = final_data, mapping = aes(x = SSB_lag/scale_factor, y = tgam_pred/scale_factor, col = tgam_ab), 
                 method = "lm", se = TRUE) +
-    scale_color_manual(values = c("low_temp" = "red", "high_temp" = "blue"),
-                       labels = c("Below Threshold", "Above Threshold"),
-                       name = "SST Category") +
+    scale_color_manual(values = color_values,
+                       labels = legend_labels,
+                       name = legend_name) +
     labs(x = paste0("SSB (lag 3) million t"),
-         y = paste0("Recruitment billions")) +
+         y = paste0("Recruitment billions"),
+         title = paste("Threshold GAM:", env_var, "=", threshold)) +
     theme_minimal() +
     theme(legend.position = "bottom")
 }
