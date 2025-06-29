@@ -145,31 +145,40 @@ test_data_quality(cpr_component$small)  # Both metrics usable
 ## LAI visualization
 
 ```{r}
+Herring_LAI$component <- factor(Herring_LAI$component, levels = c("Shetland_Orkney", "Buchan", "Banks", "Downs"))
+LAI_component$component <- factor(LAI_component$component, levels = c("Shetland_Orkney", "Buchan", "Banks", "Downs"))
+
 ## Plot timeseries of LAI by component
 ### Add LAI by year
 LAI_aggregated <- LAI_full %>%
   group_by(year, component) %>%
   summarise(LAI_9mm_sum = sum(LAI_9mm),
-    .groups = 'drop')
+    .groups = 'drop') %>%
+  mutate(component = factor(component, levels = c("Shetland_Orkney", "Buchan", "Banks", "Downs")))
+  
   
 ### Plot aggregated LAI
 plot_LAI_byyear <- ggplot(LAI_aggregated, aes(x = year, 
                     y = LAI_9mm_sum, 
-                    group = component)) +
-  geom_line(color = "navyblue", linewidth = 0.8) +
-  geom_smooth(color = "steelblue", linewidth = 0.8) +
+                    group = component,
+                    color = component)) +
+  geom_line(linewidth = 0.8) +
+  scale_color_manual(values = c("#060287", "#0878C3", "#09ABD8", "#66DCF6")) +
+  scale_y_continuous(limits = c(0, NA)) +
   facet_wrap(~ component, ncol = 2, scales = "free_y") +
-  labs(title = "Agregated Larvae Abundance Index (LAI) by Unit Area over Years", 
+  labs(title = "Agregated Component LAI", 
        x = "Year", 
-       y = "LAI (Larvae Abundance Index) >= 9mm") +
-  theme_minimal()
+       y = "LAI") +
+  theme_minimal() +
+  theme(legend.position = "none")
 print(plot_LAI_byyear)
 
 ## Plot stacked bar chart for components percentage of LAI
 plot_LAI_percent <- ggplot(LAI_component, aes(x = as.factor(year), 
                               y = LAI_perc., fill = component)) +
   geom_bar(stat = "identity", position = "stack") + # Create stacked bars
-  labs(title = "Percentage of Larvae Abundance Index (LAI) by Component and Year",
+  scale_fill_manual(values = c("#060287", "#0878C3", "#09ABD8", "#66DCF6")) +
+  labs(title = "LAI Contribution (%)",
        x = "Year",
        y = "LAI Percentage (%)",
        fill = "Component") +
@@ -177,18 +186,19 @@ plot_LAI_percent <- ggplot(LAI_component, aes(x = as.factor(year),
   theme(plot.title = element_text(hjust = 0.5),
         axis.text.x = element_text(angle = 45, hjust = 1),
         axis.title.x = element_text(margin = margin(t = 10)),
-        axis.title.y = element_text(margin = margin(r = 10))) +
-  scale_fill_viridis_d()
-print(plot_LAI_percent)
+        axis.title.y = element_text(margin = margin(r = 10)))
+plot_LAI_percent
 
 ### SSB component overlay
 plot_SSB_component_b <- ggplot(Herring_LAI, aes(x = year, y = SSB_component / 1e6, color = component, fill = component)) +
   geom_ribbon(aes(ymin = l_bnd_component / 1e6,
                   ymax = u_bnd_component / 1e6), alpha = 0.3, color = NA) +
   geom_line(linewidth = 0.8) +
-  labs(title = "SSB with 95% Confidence Bounds by Component over Years",
+  scale_color_manual(values = c("#060287", "#0878C3", "#09ABD8", "#66DCF6")) +
+  scale_fill_manual(values = c("#060287", "#0878C3", "#09ABD8", "#66DCF6")) +
+  labs(title = "SSB by Component",
        x = "Year",
-       y = "SSB in million tonnes") +
+       y = "SSB in million t") +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5),
         axis.title.x = element_text(margin = margin(t = 10)),
@@ -257,7 +267,7 @@ ggsave(filename = file.path("plots/", "LAI_percent.png"),
        height = 10,
        dpi = 300)
 
-ggsave(filename = file.path("plots/", "SSB_component_b.png"),
+ggsave(filename = file.path("plots/", "SSB_component.png"),
        plot = plot_SSB_component_b,
        bg = "white",
        width = 15,
