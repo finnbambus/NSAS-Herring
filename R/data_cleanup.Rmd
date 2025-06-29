@@ -156,28 +156,33 @@ LAI_aggregated <- LAI_full %>%
     .groups = 'drop') %>%
   mutate(component = factor(component, levels = c("Shetland_Orkney", "Buchan", "Banks", "Downs")))
   
-  
 ### Plot aggregated LAI
 plot_LAI_byyear <- ggplot(LAI_aggregated, aes(x = year, 
                     y = LAI_9mm_sum, 
-                    group = component,
-                    color = component)) +
-  geom_line(linewidth = 0.8) +
-  scale_color_manual(values = c("#060287", "#0878C3", "#09ABD8", "#66DCF6")) +
+                    color = component,
+                    shape = component)) +
+  geom_point(size = 1.5, alpha = 0.8) +
+  geom_line(linewidth = 0.8, alpha = 0.8) +
+  scale_color_viridis_d(option = "mako", begin = 0.1, end = 0.8) +
+  scale_shape_manual(values = c("Shetland_Orkney" = 16, "Buchan" = 17, "Banks" = 15, "Downs" = 18)) +
   scale_y_continuous(limits = c(0, NA)) +
-  facet_wrap(~ component, ncol = 2, scales = "free_y") +
-  labs(title = "Agregated Component LAI", 
+  labs(title = "Aggregated Component LAI", 
        x = "Year", 
-       y = "LAI") +
+       y = "LAI",
+       color = "Component",
+       shape = "Component") +
+  guides(color = guide_legend(), shape = guide_legend()) +
   theme_minimal() +
-  theme(legend.position = "none")
-print(plot_LAI_byyear)
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.title.x = element_text(margin = margin(t = 10)),
+        axis.title.y = element_text(margin = margin(r = 10)))
+plot_LAI_byyear
 
 ## Plot stacked bar chart for components percentage of LAI
 plot_LAI_percent <- ggplot(LAI_component, aes(x = as.factor(year), 
                               y = LAI_perc., fill = component)) +
   geom_bar(stat = "identity", position = "stack") + # Create stacked bars
-  scale_fill_manual(values = c("#060287", "#0878C3", "#09ABD8", "#66DCF6")) +
+  scale_fill_viridis_d(option = "mako", begin = 0.1, end = 0.8) +  # Use mako palette with capped range
   labs(title = "LAI Contribution (%)",
        x = "Year",
        y = "LAI Percentage (%)",
@@ -194,8 +199,8 @@ plot_SSB_component_b <- ggplot(Herring_LAI, aes(x = year, y = SSB_component / 1e
   geom_ribbon(aes(ymin = l_bnd_component / 1e6,
                   ymax = u_bnd_component / 1e6), alpha = 0.3, color = NA) +
   geom_line(linewidth = 0.8) +
-  scale_color_manual(values = c("#060287", "#0878C3", "#09ABD8", "#66DCF6")) +
-  scale_fill_manual(values = c("#060287", "#0878C3", "#09ABD8", "#66DCF6")) +
+  scale_color_viridis_d(option = "mako", begin = 0.1, end = 0.8) +
+  scale_fill_viridis_d(option = "mako", begin = 0.1, end = 0.8) +
   labs(title = "SSB by Component",
        x = "Year",
        y = "SSB in million t") +

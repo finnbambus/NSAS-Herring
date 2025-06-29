@@ -92,7 +92,7 @@ results_cpt <- changepoint_analysis(Herring_full,
 ### Call function plot_SSB_cpt
 plot_SSB_cpt_full <- plot_SSB_cpt(data = Herring_full,
               changepoints = c(1966, 1986,2000), 
-              ribbon_colors = c("steelblue", "orange", "grey", "purple"),
+              ribbon_colors = c("#201124", "#3e478d", "grey", "#318ca5"),
               vline_colors = c("black", "grey", "black"),
               component = "Full Stock", 
               SSB_column = "SSB", 

@@ -196,12 +196,12 @@ ggsave(filename = file.path("plots/", "SSB_cpt_components.png"),
          plots_SSB_cpt$Buchan + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
          plots_SSB_cpt$Banks + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
          plots_SSB_cpt$Downs + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
-         ncol = 2,
+         ncol = 1,
          bottom = "Year",
          left = "SSB in million t"),
        bg = "white",
-       width = 15,
-       height = 10,
+       width = 10,
+       height = 20,
        dpi = 300)
 ```
 

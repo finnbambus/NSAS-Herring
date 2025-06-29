@@ -939,7 +939,7 @@ plot_env_data_dual <- function(env_df_full_seasonal, env_df_subset_seasonal,
   # Setup
   areas <- if(is.factor(env_df_subset_seasonal$Region)) levels(env_df_subset_seasonal$Region) else unique(env_df_subset_seasonal$Region)
   column_names <- c("Full Stock", areas)
-  colors <- setNames(c("#2E86AB", "#A23B72", "#F18F01", "#C73E1D", "#6A994E"), column_names)
+  colors <- setNames(c("black", "#201124", "#3e478d", "#318ca5", "#5ccdaa"), column_names)
   
   # Function to aggregate CPR data for both yearly and autumn data
   aggregate_cpr_data <- function(cpr_data, region_name = NULL, season_filter = "All") {
@@ -1283,7 +1283,7 @@ plot_SSB_cpt <- function(data, changepoints, component, SSB_column, l_bnd_column
                          scale_to_full = FALSE) {
   
   # Set default colors if not provided
-  default_ribbon_colors <- c("steelblue", "darkorange", "purple", "lightgreen", "indianred", "cyan", "magenta")
+  default_ribbon_colors <- c("#201124", "#3e478d", "#318ca5", "#5ccdaa", "#d2f1da")
   default_vline_colors <- c("black", "black", "black", "black", "black", "black", "black", "grey")
   
   if (is.null(ribbon_colors)) {
@@ -1751,7 +1751,7 @@ srr_breakpoint_analysis <- function(data, ssb_col = "SSB", r_col = "Recruitment"
 
 
 #--------------------------------------------------------------------------------------
-## Plot SRR Residuals
+## Plot Summary
 #--------------------------------------------------------------------------------------
 
 plot_herring_summary <- function(srr_data, ssb_col, recruit_col, year_col, f_col) {
@@ -1805,24 +1805,24 @@ plot_herring_summary <- function(srr_data, ssb_col, recruit_col, year_col, f_col
   # Panel (a): SSB - with navyblue points
   p_ssb <- ggplot2::ggplot(plot_data, ggplot2::aes(x = Year, y = SSB)) +
     ggplot2::geom_line(color = "black") +
-    ggplot2::geom_point(shape = 21, fill = "navyblue", color = "white", size = 2) +
+    ggplot2::geom_point(shape = 21, fill = "#3e478d", color = "white", size = 2) +
     ggplot2::labs(y = "SSB (million t)") + theme_stacked
   
   # Panel (b): Recruits - with darkgrey fill and no outline
   p_recruits <- ggplot2::ggplot(plot_data, ggplot2::aes(x = Year, y = Recruitment)) +
-    ggplot2::geom_col(fill = "grey25", color = NA, width = 0.8) +
+    ggplot2::geom_col(fill = "#201124", color = NA, width = 0.8) +
     ggplot2::labs(y = "Recruits (billion)") + theme_stacked
   
   # Panel (c): Fishing Mortality - with navyblue points
   p_f <- ggplot2::ggplot(plot_data, ggplot2::aes(x = Year, y = F_2_6)) +
     ggplot2::geom_line(color = "black") +
-    ggplot2::geom_point(shape = 21, fill = "navyblue", color = "white", size = 2) +
+    ggplot2::geom_point(shape = 21, fill = "#3e478d", color = "white", size = 2) +
     ggplot2::labs(y = "Fishing mortality") + theme_stacked
   
   # Panel (d): SRR log residuals - with conditional color and no outline
   p_residuals <- ggplot2::ggplot(plot_data, ggplot2::aes(x = Year, y = log_residuals)) +
     ggplot2::geom_col(ggplot2::aes(fill = residual_color), color = NA, width = 0.8) +
-    ggplot2::scale_fill_manual(values = c("negative" = "navyblue", "positive" = "grey25"), guide = "none", na.value="grey80") +
+    ggplot2::scale_fill_manual(values = c("negative" = "#3e478d", "positive" = "#201124"), guide = "none", na.value="grey80") +
     ggplot2::geom_hline(yintercept = 0, color = "black") +
     ggplot2::labs(y = "SRR log residuals", x = "Year") +
     ggplot2::theme_classic() + ggplot2::theme(plot.margin = ggplot2::margin(t = 5, r = 5, b = 5, l = 5))
