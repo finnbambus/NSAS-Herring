@@ -195,7 +195,7 @@ plot_LAI_percent <- ggplot(LAI_component, aes(x = as.factor(year),
 plot_LAI_percent
 
 ### SSB component overlay
-plot_SSB_component_b <- ggplot(Herring_LAI, aes(x = year, y = SSB_component / 1e6, color = component, fill = component)) +
+plot_SSB_component <- ggplot(Herring_LAI, aes(x = year, y = SSB_component / 1e6, color = component, fill = component)) +
   geom_ribbon(aes(ymin = l_bnd_component / 1e6,
                   ymax = u_bnd_component / 1e6), alpha = 0.3, color = NA) +
   geom_line(linewidth = 0.8) +
@@ -208,7 +208,21 @@ plot_SSB_component_b <- ggplot(Herring_LAI, aes(x = year, y = SSB_component / 1e
   theme(plot.title = element_text(hjust = 0.5),
         axis.title.x = element_text(margin = margin(t = 10)),
         axis.title.y = element_text(margin = margin(r = 10)))
-plot_SSB_component_b
+plot_SSB_component
+
+### R component overlay
+plot_R_component <- ggplot(Herring_LAI, aes(x = year, y = Recruitment / 1e6, color = component, fill = component)) +
+  geom_line(linewidth = 0.8) +
+  scale_color_viridis_d(option = "mako", begin = 0.1, end = 0.8) +
+  scale_fill_viridis_d(option = "mako", begin = 0.1, end = 0.8) +
+  labs(title = "R by Component",
+       x = "Year",
+       y = "R in billions") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.title.x = element_text(margin = margin(t = 10)),
+        axis.title.y = element_text(margin = margin(r = 10)))
+plot_R_component
 ```
 
 ## Environmental CPR visualization
@@ -273,7 +287,14 @@ ggsave(filename = file.path("plots/", "LAI_percent.png"),
        dpi = 300)
 
 ggsave(filename = file.path("plots/", "SSB_component.png"),
-       plot = plot_SSB_component_b,
+       plot = plot_SSB_component,
+       bg = "white",
+       width = 15,
+       height = 10,
+       dpi = 300)
+
+ggsave(filename = file.path("plots/", "R_component.png"),
+       plot = plot_R_component,
        bg = "white",
        width = 15,
        height = 10,
