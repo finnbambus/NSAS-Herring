@@ -1442,7 +1442,7 @@ plot_hysteresis <- function(data, break_years, component,
                             fmsy = 0.32,
                             show_msy_btrigger = TRUE,
                             show_fmsy = TRUE,
-                            colors = c("steelblue", "darkorange", "purple", "lightgreen", "indianred", "navyblue"),
+                            colors = c("#201124", "#3e478d", "#318ca5", "#5ccdaa", "#d2f1da", "navyblue"),
                             auto_nudge = TRUE,           # New: automatic intelligent nudging
                             nudge_force = 1,             # New: control nudging strength
                             label_box_padding = 0.35,    # New: padding around labels
@@ -1844,7 +1844,7 @@ plot_SRR <- function(data, break_years, title_stock, used_model,
                      ssb_col = "SSB", r_col = "Recruitment", year_col = "year",
                      Blim = 828874,
                      show_Blim = TRUE,  # New argument to control Blim display
-                     colors = c("steelblue", "darkorange", "purple", "lightgreen", "indianred", "darkred", "darkblue"),
+                     colors = c("#201124", "#3e478d", "#318ca5", "#5ccdaa", "#d2f1da", "navyblue"),
                      nudge_params = NULL) {  # New argument for nudge parameters
   
   # Check if specified columns exist in the data

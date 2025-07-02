@@ -108,8 +108,8 @@ plot_SSB_cpt_full
 ggsave(filename = file.path("plots/", "SSB_cpt_full.png"),
        plot = plot_SSB_cpt_full,
        bg = "white",
-       width = 15,
-       height = 10,
+       width = 10,
+       height = 7,
        dpi = 300)
 ```
 
@@ -148,8 +148,8 @@ plot_hysteresis_full
 ggsave(filename = file.path("plots/", "hysteresis_full.png"),
        plot = plot_hysteresis_full,
        bg = "white",
-       width = 15,
-       height = 10,
+       width = 10,
+       height = 7,
        dpi = 300)
 ```
 
@@ -224,8 +224,8 @@ plot_SRR_full
 ggsave(filename = file.path("plots/", "SRR_full.png"),
        plot = plot_SRR_full,
        bg = "white",
-       width = 15,
-       height = 10,
+       width = 10,
+       height = 7,
        dpi = 300)
 ```
 
@@ -283,7 +283,7 @@ plot_tgam_full_larv <- plot_tgam_complete(tgam_input, threshold = 34.3, env_var 
 ggsave(filename = file.path("plots/tGAM", "Full_SSS_larv.png"),
        plot = plot_tgam_full_larv,
        bg = "white",
-       width = 15,
-       height = 10,
+       width = 10,
+       height = 7,
        dpi = 300)
 ```

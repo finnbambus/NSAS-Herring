@@ -275,29 +275,29 @@ save(cpr_component, file = file.path("data/", "cpr_component.Rdata"))
 ggsave(filename = file.path("plots/", "LAI_by_year.png"),
        plot = plot_LAI_byyear,
        bg = "white",
-       width = 15,
-       height = 10,
+       width = 10,
+       height = 7,
        dpi = 300)
 
 ggsave(filename = file.path("plots/", "LAI_percent.png"),
        plot = plot_LAI_percent,
        bg = "white",
-       width = 15,
-       height = 10,
+       width = 10,
+       height = 7,
        dpi = 300)
 
 ggsave(filename = file.path("plots/", "SSB_component.png"),
        plot = plot_SSB_component,
        bg = "white",
-       width = 15,
-       height = 10,
+       width = 10,
+       height = 7,
        dpi = 300)
 
 ggsave(filename = file.path("plots/", "R_component.png"),
        plot = plot_R_component,
        bg = "white",
-       width = 15,
-       height = 10,
+       width = 10,
+       height = 7,
        dpi = 300)
 
 ### Env. plot

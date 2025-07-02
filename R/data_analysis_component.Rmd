@@ -143,6 +143,8 @@ results_cpt$Downs <- changepoint_analysis(Herring$Downs,
 plots_SSB_cpt <- list()
 plots_SSB_cpt$SHOR <- plot_SSB_cpt(data = Herring$SHOR, 
               changepoints = results_cpt$SHOR$consensus$changepoint_years,
+              ribbon_colors = c("#3e478d", "#5ccdaa", "grey", "#318ca5", "grey"),
+              vline_colors = c("black", "grey", "black", "grey"),
               component = "Shetland / Orkney", 
               SSB_column = "SSB_component", 
               l_bnd_column = "l_bnd_component", 
@@ -155,6 +157,8 @@ plots_SSB_cpt$SHOR
 ### Buchan
 plots_SSB_cpt$Buchan <- plot_SSB_cpt(data = Herring$Buchan, 
               changepoints = results_cpt$Buchan$consensus$changepoint_years,
+              ribbon_colors = c("#3e478d", "#5ccdaa", "#318ca5", "grey"),
+              vline_colors = c("black", "black", "grey"),
               component = "Buchan", 
               SSB_column = "SSB_component", 
               l_bnd_column = "l_bnd_component", 
@@ -167,6 +171,8 @@ plots_SSB_cpt$Buchan
 ### Banks
 plots_SSB_cpt$Banks <- plot_SSB_cpt(data = Herring$Banks, 
               changepoints = results_cpt$Banks$consensus$changepoint_years,
+              ribbon_colors = c("#3e478d", "#5ccdaa", "grey", "#318ca5", "grey"),
+              vline_colors = c("black", "grey", "black", "grey"),
               component = "Banks", 
               SSB_column = "SSB_component", 
               l_bnd_column = "l_bnd_component", 
@@ -179,6 +185,8 @@ plots_SSB_cpt$Banks
 ### Downs
 plots_SSB_cpt$Downs <- plot_SSB_cpt(data = Herring$Downs, 
               changepoints = results_cpt$Downs$consensus$changepoint_years,
+              ribbon_colors = c("#3e478d", "#318ca5", "grey"),
+              vline_colors = c("black", "grey"),
               component = "Downs", 
               SSB_column = "SSB_component", 
               l_bnd_column = "l_bnd_component", 
@@ -300,12 +308,12 @@ ggsave(filename = file.path("plots/", "hysteresis_components.png"),
          plots_hysteresis$Buchan + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
          plots_hysteresis$Banks + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
          plots_hysteresis$Downs + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
-         ncol = 2,
+         ncol = 1,
          bottom = "F",
          left = "SSB in million t"),
        bg = "white",
-       width = 15,
-       height = 10,
+       width = 10,
+       height = 20,
        dpi = 300)
 ```
 
@@ -607,12 +615,12 @@ ggsave(filename = file.path("plots/", "SRR_components.png"),
          plots_SRR$Buchan + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
          plots_SRR$Banks + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
          plots_SRR$Downs + theme(axis.title.x = element_blank(), axis.title.y = element_blank()),
-         ncol = 2,
+         ncol = 1,
          bottom = "SSB in million t",
          left = "R in billions"),
        bg = "white",
-       width = 15,
-       height = 10,
+       width = 10,
+       height = 20,
        dpi = 300)
 ```
 
@@ -759,7 +767,7 @@ plot_tgam_banks <- plot_tgam_complete(tgam_input, threshold = 12.1, env_var = "M
 ggsave(filename = file.path("plots/tGAM", "Banks_SST.png"),
        plot = plot_tgam_banks,
        bg = "white",
-       width = 15,
-       height = 10,
+       width = 10,
+       height = 7,
        dpi = 300)
 ```
