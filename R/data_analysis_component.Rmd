@@ -213,6 +213,129 @@ ggsave(filename = file.path("plots/", "SSB_cpt_components.png"),
        dpi = 300)
 ```
 
+### Save plot as grid
+
+```{r}
+#### CPT plot for full stock as well as Herring_full must be loaded from "data_analysis.Rmd"
+#### Plot SSB cpt with parameter "plot_for_grid = TRUE"
+plots_F <- list()
+plots_R <- list()
+
+# Full Stock plots
+plot_F_full <- plot_F_cpt(data = Herring_full,
+                          changepoints = c(1966, 1983, 2000),
+                          ribbon_colors = c("#201124", "#3e478d", "grey", "#318ca5"),
+                          vline_colors = c("black", "grey", "black"),
+                          component = "Full Stock")
+
+plot_R_full <- plot_Recruitment_cpt(data = Herring_full,
+                                    changepoints = c(1966, 1983, 2000),
+                                    ribbon_colors = c("#201124", "#3e478d", "grey", "#318ca5"),
+                                    vline_colors = c("black", "grey", "black"),
+                                    component = "Full Stock")
+
+# Shetland Orkney plots
+plots_F$SHOR <- plot_F_cpt(data = Herring$SHOR,
+                           changepoints = results_cpt$SHOR$consensus$changepoint_years,
+                           ribbon_colors = c("#3e478d", "#5ccdaa", "grey", "#318ca5", "grey"),
+                           vline_colors = c("black", "grey", "black", "grey"),
+                           component = "Shetland / Orkney")
+
+plots_R$SHOR <- plot_Recruitment_cpt(data = Herring$SHOR,
+                                     changepoints = results_cpt$SHOR$consensus$changepoint_years,
+                                     ribbon_colors = c("#3e478d", "#5ccdaa", "grey", "#318ca5", "grey"),
+                                     vline_colors = c("black", "grey", "black", "grey"),
+                                     component = "Shetland / Orkney")
+
+# Buchan plots
+plots_F$Buchan <- plot_F_cpt(data = Herring$Buchan,
+                             changepoints = results_cpt$Buchan$consensus$changepoint_years,
+                             ribbon_colors = c("#3e478d", "#5ccdaa", "#318ca5", "grey"),
+                             vline_colors = c("black", "black", "grey"),
+                             component = "Buchan")
+
+plots_R$Buchan <- plot_Recruitment_cpt(data = Herring$Buchan,
+                                       changepoints = results_cpt$Buchan$consensus$changepoint_years,
+                                       ribbon_colors = c("#3e478d", "#5ccdaa", "#318ca5", "grey"),
+                                       vline_colors = c("black", "black", "grey"),
+                                       component = "Buchan")
+
+# Banks plots
+plots_F$Banks <- plot_F_cpt(data = Herring$Banks,
+                            changepoints = results_cpt$Banks$consensus$changepoint_years,
+                            ribbon_colors = c("#3e478d", "#5ccdaa", "grey", "#318ca5", "grey"),
+                            vline_colors = c("black", "grey", "black", "grey"),
+                            component = "Banks")
+
+plots_R$Banks <- plot_Recruitment_cpt(data = Herring$Banks,
+                                      changepoints = results_cpt$Banks$consensus$changepoint_years,
+                                      ribbon_colors = c("#3e478d", "#5ccdaa", "grey", "#318ca5", "grey"),
+                                      vline_colors = c("black", "grey", "black", "grey"),
+                                      component = "Banks")
+
+# Downs plots
+plots_F$Downs <- plot_F_cpt(data = Herring$Downs,
+                            changepoints = results_cpt$Downs$consensus$changepoint_years,
+                            ribbon_colors = c("#3e478d", "#318ca5", "grey"),
+                            vline_colors = c("black", "grey"),
+                            component = "Downs")
+
+plots_R$Downs <- plot_Recruitment_cpt(data = Herring$Downs,
+                                      changepoints = results_cpt$Downs$consensus$changepoint_years,
+                                      ribbon_colors = c("#3e478d", "#318ca5", "grey"),
+                                      vline_colors = c("black", "grey"),
+                                      component = "Downs")
+
+# Create the 5x3 grid with row labels and column headers
+library(grid)
+
+# Create individual text grobs for row labels
+row_label1 <- textGrob("Full Stock", rot = 90, gp = gpar(fontsize = 12, fontface = "bold"))
+row_label2 <- textGrob("Shetland/Orkney", rot = 90, gp = gpar(fontsize = 12, fontface = "bold"))
+row_label3 <- textGrob("Buchan", rot = 90, gp = gpar(fontsize = 12, fontface = "bold"))
+row_label4 <- textGrob("Banks", rot = 90, gp = gpar(fontsize = 12, fontface = "bold"))
+row_label5 <- textGrob("Downs", rot = 90, gp = gpar(fontsize = 12, fontface = "bold"))
+
+# Create individual text grobs for column headers
+col_header1 <- textGrob("Fishing Mortality", gp = gpar(fontsize = 12, fontface = "bold"))
+col_header2 <- textGrob("SSB with Changepoints", gp = gpar(fontsize = 12, fontface = "bold"))
+col_header3 <- textGrob("Recruitment", gp = gpar(fontsize = 12, fontface = "bold"))
+
+# Create empty grob for top-left corner
+empty_grob <- nullGrob()
+
+# Arrange plots with labels
+grid_plot <- grid.arrange(
+  # Header row
+  empty_grob, col_header1, col_header2, col_header3,
+  
+  # Row 1: Full Stock
+  row_label1, plot_F_full, plot_SSB_cpt_full, plot_R_full,
+  
+  # Row 2: Shetland Orkney
+  row_label2, plots_F$SHOR, plots_SSB_cpt$SHOR, plots_R$SHOR,
+  
+  # Row 3: Buchan
+  row_label3, plots_F$Buchan, plots_SSB_cpt$Buchan, plots_R$Buchan,
+  
+  # Row 4: Banks
+  row_label4, plots_F$Banks, plots_SSB_cpt$Banks, plots_R$Banks,
+  
+  # Row 5: Downs
+  row_label5, plots_F$Downs, plots_SSB_cpt$Downs, plots_R$Downs,
+  
+  nrow = 6, ncol = 4,
+  widths = c(0.15, 1, 1, 1),
+  heights = c(0.1, 1, 1, 1, 1, 1))
+
+ggsave(filename = file.path("plots/", "cpt_grid.png"),
+       plot = grid_plot,
+       bg = "white",
+       width = 12,
+       height = 10,
+       dpi = 300)
+```
+
 # Hysteresis
 
 ## Analysis

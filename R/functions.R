@@ -1280,7 +1280,8 @@ plot_SSB_cpt <- function(data, changepoints, component, SSB_column, l_bnd_column
                          start_year = NULL, 
                          end_year = NULL, 
                          show_hlines = TRUE,
-                         scale_to_full = FALSE) {
+                         scale_to_full = FALSE,
+                         plot_for_grid = FALSE) {
   
   # Set default colors if not provided
   default_ribbon_colors <- c("#201124", "#3e478d", "#318ca5", "#5ccdaa", "#d2f1da")
@@ -1300,19 +1301,36 @@ plot_SSB_cpt <- function(data, changepoints, component, SSB_column, l_bnd_column
   
   # Create the base plot
   p <- ggplot(data) +
-    geom_line(aes(x = year, y = .data[[SSB_column]]/1000000), linewidth = 0.8) +
-    labs(title = component, 
-         x = "Year", 
-         y = "SSB in million t") +
-    theme_minimal() +
-    theme(plot.title = element_text(hjust = 0.5),
-          axis.title.x = element_text(margin = margin(t = 10)),
-          axis.title.y = element_text(margin = margin(r = 10)))
+    geom_line(aes(x = year, y = .data[[SSB_column]]/1000000), linewidth = 0.8)
   
-  # Scale to full stock proportio if enabled
+  # Conditional formatting based on plot_for_grid
+  if (plot_for_grid) {
+    # Grid formatting: no labels, fixed x-axis range
+    p <- p + 
+      xlim(1947, 2024) +
+      theme_minimal() +
+      theme(axis.title = element_blank(),
+            axis.text = element_text(size = 8))
+  } else {
+    # Original formatting: with labels and titles
+    p <- p +
+      labs(title = component, 
+           x = "Year", 
+           y = "SSB in million t") +
+      theme_minimal() +
+      theme(plot.title = element_text(hjust = 0.5),
+            axis.title.x = element_text(margin = margin(t = 10)),
+            axis.title.y = element_text(margin = margin(r = 10)))
+  }
+  
+  # Scale to full stock proportion if enabled
   if (scale_to_full) {
-    p <- p + xlim(1947, 2025) +
-      ylim(0, 7)}
+    if (plot_for_grid) {
+      p <- p + ylim(0, 7)
+    } else {
+      p <- p + xlim(1947, 2025) + ylim(0, 7)
+    }
+  }
   
   # Add horizontal lines if enabled
   if (show_hlines) {
@@ -1341,7 +1359,97 @@ plot_SSB_cpt <- function(data, changepoints, component, SSB_column, l_bnd_column
                          fill = ribbon_colors[i], 
                          alpha = 0.5)}
   
-  return(p)}
+  return(p)
+}
+
+
+#--------------------------------------------------------------------------------------
+## Plot Grid CPT
+#--------------------------------------------------------------------------------------
+
+plot_F_cpt <- function(data, changepoints, ribbon_colors, vline_colors, component, 
+                       F_column = "F", l_bnd_column = "F_low", u_bnd_column = "F_high") {
+  
+  # Determine start and end years from data
+  start_year <- min(data$year, na.rm = TRUE)
+  end_year <- max(data$year, na.rm = TRUE)
+  
+  # Create the base plot
+  p <- ggplot(data, aes(x = year)) +
+    geom_line(aes(y = .data[[F_column]]), linewidth = 0.8, color = "black") +
+    xlim(1947, 2024) +  # Fixed x-axis range
+    theme_minimal() +
+    theme(axis.title = element_blank(),
+          axis.text = element_text(size = 8))
+  
+  # Add changepoint lines
+  if(length(changepoints) > 0) {
+    p <- p + geom_vline(xintercept = changepoints, 
+                        color = vline_colors, 
+                        linetype = "dashed", 
+                        linewidth = 0.7)
+  }
+  
+  # Create year ranges for colored ribbons
+  all_years <- c(start_year, changepoints, end_year)
+  
+  # Add colored ribbons for each period
+  for (i in 1:(length(all_years) - 1)) {
+    year_range <- all_years[i]:all_years[i + 1]
+    
+    p <- p + geom_ribbon(data = filter(data, year %in% year_range),
+                         mapping = aes(x = year, 
+                                       ymin = .data[[l_bnd_column]],
+                                       ymax = .data[[u_bnd_column]]),
+                         fill = ribbon_colors[i], 
+                         alpha = 0.5)
+  }
+  
+  return(p)
+}
+
+# Function to plot Recruitment with phase coloring
+plot_Recruitment_cpt <- function(data, changepoints, ribbon_colors, vline_colors, component,
+                                 R_column = "Recruitment", l_bnd_column = "Recruitment_low", 
+                                 u_bnd_column = "Recruitment_high") {
+  
+  # Determine start and end years from data
+  start_year <- min(data$year, na.rm = TRUE)
+  end_year <- max(data$year, na.rm = TRUE)
+  
+  # Create the base plot
+  p <- ggplot(data, aes(x = year)) +
+    geom_line(aes(y = .data[[R_column]]/1000000), linewidth = 0.8, color = "black") +
+    xlim(1947, 2024) +  # Fixed x-axis range
+    theme_minimal() +
+    theme(axis.title = element_blank(),
+          axis.text = element_text(size = 8))
+  
+  # Add changepoint lines
+  if(length(changepoints) > 0) {
+    p <- p + geom_vline(xintercept = changepoints, 
+                        color = vline_colors, 
+                        linetype = "dashed", 
+                        linewidth = 0.7)
+  }
+  
+  # Create year ranges for colored ribbons
+  all_years <- c(start_year, changepoints, end_year)
+  
+  # Add colored ribbons for each period
+  for (i in 1:(length(all_years) - 1)) {
+    year_range <- all_years[i]:all_years[i + 1]
+    
+    p <- p + geom_ribbon(data = filter(data, year %in% year_range),
+                         mapping = aes(x = year, 
+                                       ymin = .data[[l_bnd_column]]/1000000,
+                                       ymax = .data[[u_bnd_column]]/1000000),
+                         fill = ribbon_colors[i], 
+                         alpha = 0.5)
+  }
+  
+  return(p)
+}
 
 
 #--------------------------------------------------------------------------------------

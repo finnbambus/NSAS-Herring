@@ -71,7 +71,11 @@ ICES_data[nrow(ICES_data) + 1, ] <- NA
 
 ### Add F & R from to Herring_full
 Herring_full$F <- ICES_data$F
+Herring_full$F_high <- ICES_data$F_high
+Herring_full$F_low <- ICES_data$F_low
 Herring_full$Recruitment <- ICES_data$Recruitment
+Herring_full$Recruitment_high <- ICES_data$recruitment_high
+Herring_full$Recruitment_low <- ICES_data$recruitment_low
   
 
 ## Split SSB Data by components & 95% bounds by component percentage and attach it and LAI percent data to SSB
@@ -80,8 +84,10 @@ Herring_LAI <- Herring_full %>%
   mutate(SSB_component = SSB * (LAI_perc. / 100),
          l_bnd_component = l_bnd * (LAI_perc. / 100),
          u_bnd_component = u_bnd * (LAI_perc. / 100),
-         Recruitment = as.integer(Recruitment * (LAI_perc. / 100))) %>%
-  dplyr::select(year, component, LAI_perc., SSB_component, l_bnd_component, u_bnd_component, F, Recruitment) %>%
+         Recruitment = as.integer(Recruitment * (LAI_perc. / 100)),
+         Recruitment_high = as.integer(Recruitment_high * (LAI_perc. / 100)),
+         Recruitment_low = as.integer(Recruitment_low * (LAI_perc. / 100))) %>%
+  dplyr::select(year, component, LAI_perc., SSB_component, l_bnd_component, u_bnd_component, F, F_high, F_low, Recruitment, Recruitment_high, Recruitment_low) %>%
   drop_na()
 
 ```
