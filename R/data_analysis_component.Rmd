@@ -677,9 +677,9 @@ plots_SRR$SHOR <- plot_SRR(Herring$SHOR, break_years = results_SRR$SHOR$break_ye
                           ssb_col = "SSB_component",
                           show_Blim = FALSE,
                           nudge_params = list(
-                            list(nudge_y = -8, nudge_x = 0.1),    # first year
+                            list(nudge_y = 9, nudge_x = -0.15),    # first year
                             list(nudge_y = 0, nudge_x = -0.2),    # breakpoint
-                            list(nudge_y = -15, nudge_x = 0),     # last year
+                            list(nudge_y = 20, nudge_x = 0),     # last year
                             list(nudge_y = -0, nudge_x = 0.2)))   # more breakpoints
 plots_SRR$SHOR
 
@@ -692,10 +692,10 @@ plots_SRR$Buchan <- plot_SRR(Herring$Buchan, break_years = results_SRR$Buchan$br
                           ssb_col = "SSB_component",
                           show_Blim = FALSE,
                           nudge_params = list(
-                            list(nudge_y = -8, nudge_x = 0.1),    # first year
-                            list(nudge_y = 0, nudge_x = -0.2),    # breakpoint
-                            list(nudge_y = -25, nudge_x = 0),     # last year
-                            list(nudge_y = -0, nudge_x = 0.2)))   # more breakpoints
+                            list(nudge_y = 5, nudge_x = 0),    # first year
+                            list(nudge_y = 5, nudge_x = 0),    # breakpoint
+                            list(nudge_y = 25, nudge_x = 0),     # last year
+                            list(nudge_y = 10, nudge_x = -0.1)))   # more breakpoints
 plots_SRR$Buchan
 
 #---------------------------------------------------------------------
@@ -707,10 +707,10 @@ plots_SRR$Banks <- plot_SRR(Herring$Banks, break_years = results_SRR$Banks$break
                           ssb_col = "SSB_component",
                           show_Blim = FALSE,
                           nudge_params = list(
-                            list(nudge_y = -8, nudge_x = 0.1),    # first year
-                            list(nudge_y = 10, nudge_x = -0.1),    # breakpoint
-                            list(nudge_y = -25, nudge_x = 0),     # last year
-                            list(nudge_y = -0, nudge_x = 0.2)))   # more breakpoints
+                            list(nudge_y = 10, nudge_x = 0),    # first year
+                            list(nudge_y = 8, nudge_x = 0),    # breakpoint
+                            list(nudge_y = 15, nudge_x = 0),     # last year
+                            list(nudge_y = 0, nudge_x = 0.05)))   # more breakpoints
 plots_SRR$Banks
 
 #---------------------------------------------------------------------
@@ -722,10 +722,10 @@ plots_SRR$Downs <- plot_SRR(Herring$Downs, break_years = results_SRR$Downs$break
                           ssb_col = "SSB_component",
                           show_Blim = FALSE,
                           nudge_params = list(
-                            list(nudge_y = -8, nudge_x = 0.1),    # first year
-                            list(nudge_y = 10, nudge_x = -0.1),    # breakpoint
-                            list(nudge_y = -25, nudge_x = 0),     # last year
-                            list(nudge_y = -0, nudge_x = 0.2)))   # more breakpoints
+                            list(nudge_y = 7, nudge_x = 0),    # first year
+                            list(nudge_y = 4, nudge_x = 0),    # breakpoint
+                            list(nudge_y = 7, nudge_x = 0),     # last year
+                            list(nudge_y = 5, nudge_x = 0)))   # more breakpoints
 plots_SRR$Downs
 ```
 
