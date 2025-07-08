@@ -50,14 +50,16 @@ plot_overview <- plot_herring_summary(
   ssb_col = "SSB",
   recruit_col = "Recruitment",
   year_col = "year",
-  f_col = "F")
+  f_col = "F",
+  ssb_hlines = 1.31,
+  f_hlines = 0.32)
 
 
 ggsave(filename = file.path("plots/", "overview.png"),
        plot(plot_overview),
        bg = "white",
-       width = 10,
-       height = 20,
+       width = 7,
+       height = 14,
        dpi = 300)
 ```
 

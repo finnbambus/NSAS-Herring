@@ -1862,7 +1862,7 @@ srr_breakpoint_analysis <- function(data, ssb_col = "SSB", r_col = "Recruitment"
 ## Plot Summary
 #--------------------------------------------------------------------------------------
 
-plot_herring_summary <- function(srr_data, ssb_col, recruit_col, year_col, f_col) {
+plot_herring_summary <- function(srr_data, ssb_col, recruit_col, year_col, f_col, ssb_hlines = NULL, f_hlines = NULL) {
   
   # --- Step 1: VALIDATE COLUMN NAMES ---
   required_cols <- c(ssb_col, recruit_col, year_col, f_col)
@@ -1910,22 +1910,42 @@ plot_herring_summary <- function(srr_data, ssb_col, recruit_col, year_col, f_col
     ggplot2::theme(axis.title.x = ggplot2::element_blank(), axis.text.x = ggplot2::element_blank(),
                    axis.ticks.x = ggplot2::element_blank(), plot.margin = ggplot2::margin(t = 5, r = 5, b = 0, l = 5))
   
-  # Panel (a): SSB - with navyblue points
+  # Panel (a): SSB - with navyblue points and optional horizontal lines
   p_ssb <- ggplot2::ggplot(plot_data, ggplot2::aes(x = Year, y = SSB)) +
     ggplot2::geom_line(color = "black") +
     ggplot2::geom_point(shape = 21, fill = "#3e478d", color = "white", size = 2) +
     ggplot2::labs(y = "SSB (million t)") + theme_stacked
+  
+  # Add horizontal lines to SSB plot if provided
+  if (!is.null(ssb_hlines)) {
+    p_ssb <- p_ssb + 
+      ggplot2::geom_hline(yintercept = ssb_hlines, 
+                          color = "#3e478d", 
+                          linetype = "dashed", 
+                          alpha = 0.8, 
+                          linewidth = 0.8)
+  }
   
   # Panel (b): Recruits - with darkgrey fill and no outline
   p_recruits <- ggplot2::ggplot(plot_data, ggplot2::aes(x = Year, y = Recruitment)) +
     ggplot2::geom_col(fill = "#201124", color = NA, width = 0.8) +
     ggplot2::labs(y = "Recruits (billion)") + theme_stacked
   
-  # Panel (c): Fishing Mortality - with navyblue points
+  # Panel (c): Fishing Mortality - with navyblue points and optional horizontal lines
   p_f <- ggplot2::ggplot(plot_data, ggplot2::aes(x = Year, y = F_2_6)) +
     ggplot2::geom_line(color = "black") +
     ggplot2::geom_point(shape = 21, fill = "#3e478d", color = "white", size = 2) +
     ggplot2::labs(y = "Fishing mortality") + theme_stacked
+  
+  # Add horizontal lines to F plot if provided
+  if (!is.null(f_hlines)) {
+    p_f <- p_f + 
+      ggplot2::geom_hline(yintercept = f_hlines, 
+                          color = "#3e478d", 
+                          linetype = "dashed", 
+                          alpha = 0.8, 
+                          linewidth = 0.8)
+  }
   
   # Panel (d): SRR log residuals - with conditional color and no outline
   p_residuals <- ggplot2::ggplot(plot_data, ggplot2::aes(x = Year, y = log_residuals)) +
@@ -1941,7 +1961,8 @@ plot_herring_summary <- function(srr_data, ssb_col, recruit_col, year_col, f_col
   final_plot <- combined_plot + patchwork::plot_annotation(tag_levels = 'a', tag_suffix = ')') &
     ggplot2::theme(plot.tag = ggplot2::element_text(face = 'bold'))
   
-  print(final_plot)}
+  print(final_plot)
+}
 
 
 #--------------------------------------------------------------------------------------
