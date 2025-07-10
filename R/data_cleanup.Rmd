@@ -172,7 +172,7 @@ plot_LAI_byyear <- ggplot(LAI_aggregated, aes(x = year,
   scale_color_viridis_d(option = "mako", begin = 0.1, end = 0.8) +
   scale_shape_manual(values = c("Shetland_Orkney" = 16, "Buchan" = 17, "Banks" = 15, "Downs" = 18)) +
   scale_y_continuous(limits = c(0, NA)) +
-  labs(title = "Aggregated Component LAI", 
+  labs(title = NULL, 
        x = "Year", 
        y = "LAI",
        color = "Component",
@@ -189,7 +189,7 @@ plot_LAI_percent <- ggplot(LAI_component, aes(x = as.factor(year),
                               y = LAI_perc., fill = component)) +
   geom_bar(stat = "identity", position = "stack") + # Create stacked bars
   scale_fill_viridis_d(option = "mako", begin = 0.1, end = 0.8) +  # Use mako palette with capped range
-  labs(title = "LAI Contribution (%)",
+  labs(title = NULL,
        x = "Year",
        y = "LAI Percentage (%)",
        fill = "Component") +
@@ -207,7 +207,7 @@ plot_SSB_component <- ggplot(Herring_LAI, aes(x = year, y = SSB_component / 1e6,
   geom_line(linewidth = 0.8) +
   scale_color_viridis_d(option = "mako", begin = 0.1, end = 0.8) +
   scale_fill_viridis_d(option = "mako", begin = 0.1, end = 0.8) +
-  labs(title = "SSB by Component",
+  labs(title = NULL,
        x = "Year",
        y = "SSB in million t") +
   theme_minimal() +
@@ -221,7 +221,7 @@ plot_R_component <- ggplot(Herring_LAI, aes(x = year, y = Recruitment / 1e6, col
   geom_line(linewidth = 0.8) +
   scale_color_viridis_d(option = "mako", begin = 0.1, end = 0.8) +
   scale_fill_viridis_d(option = "mako", begin = 0.1, end = 0.8) +
-  labs(title = "R by Component",
+  labs(title = NULL,
        x = "Year",
        y = "R in billions") +
   theme_minimal() +
@@ -247,10 +247,7 @@ print(plot_env_grid)
 
 
 threshold_values <- list(
-  "Banks" = 12.1  # Your calculated threshold for Banks
-  # "Scotian Shelf" = 11.8,  # Add other thresholds if you have them
-  # "Georges Bank" = 12.5    # Add other thresholds if you have them
-)
+  "Banks" = 12.1)
 ```
 
 # Save data and plots

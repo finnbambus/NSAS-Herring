@@ -1086,7 +1086,8 @@ plot_env_data_dual <- function(env_df_full_seasonal, env_df_subset_seasonal,
       phyto_vals_yearly <- get_cpr_data(cpr_component_data$phyto, column_name, data_years, "All")
       phyto_vals_autumn <- get_cpr_data(cpr_component_data$phyto, column_name, data_env_autumn$year, "Autumn")
       small_vals_yearly <- get_cpr_data(cpr_component_data$small, column_name, data_years, "All")
-      small_vals_autumn <- get_cpr_data(cpr_component_data$small, column_name, data_env_autumn$year, "Autumn")}
+      small_vals_autumn <- get_cpr_data(cpr_component_data$small, column_name, data_env_autumn$year, "Autumn")
+    }
     
     # Create data frames
     phyto_df_yearly <- data.frame(year = data_years, phytoplankton = phyto_vals_yearly)
@@ -1106,33 +1107,39 @@ plot_env_data_dual <- function(env_df_full_seasonal, env_df_subset_seasonal,
       region_threshold <- threshold_values[[column_name]]
     }
     
-    # Start building the plot list with consistent elements
+    # Start building the plot list with NEW ORDER: SST, SSS, Phytoplankton, Zooplankton
     plots <- list(
-      create_ts_plot_dual(phyto_df_yearly, phyto_df_autumn, "phytoplankton", "phytoplankton", 
-                          "Phytoplankton (ind/sample)", 
-                          if(is_first_col) column_name else column_name, FALSE, is_first_col, color),
-      create_ts_plot_dual(small_df_yearly, small_df_autumn, "small_zooplankton", "small_zooplankton", 
-                          "Small Zooplankton (ind/sample)", 
-                          NULL, FALSE, is_first_col, color),
+      # First row: SST
       create_ts_plot_dual(data_env_yearly, data_env_autumn, env_vars$sst, env_vars$sst, 
                           "SST (°C)", 
-                          NULL, FALSE, is_first_col, color, region_threshold, "sst"))
+                          if(is_first_col) column_name else column_name, FALSE, is_first_col, color, region_threshold, "sst"),
+      # Second row: SSS
+      create_ts_plot_dual(data_env_yearly, data_env_autumn, env_vars$sss, env_vars$sss, 
+                          "SSS", 
+                          NULL, FALSE, is_first_col, color),
+      # Third row: Phytoplankton
+      create_ts_plot_dual(phyto_df_yearly, phyto_df_autumn, "phytoplankton", "phytoplankton", 
+                          "Phytoplankton (ind/sample)", 
+                          NULL, FALSE, is_first_col, color)
+    )
     
     # Add SBT plot only if include_sbt is TRUE and the variable exists in data
     if (include_sbt && "Mean_SBT" %in% names(data_env_yearly)) {
+      # Insert SBT as second plot (after SST, before SSS)
       plots <- append(plots, list(
         create_ts_plot_dual(data_env_yearly, data_env_autumn, env_vars$sbt, env_vars$sbt, 
                             "SBT (°C)", 
-                            NULL, FALSE, is_first_col, color)))
+                            NULL, FALSE, is_first_col, color)), after = 1)
     }
     
-    # Add SSS plot (always last, so it gets is_bottom = TRUE)
+    # Add Small Zooplankton plot (always last, so it gets is_bottom = TRUE)
     plots <- append(plots, list(
-      create_ts_plot_dual(data_env_yearly, data_env_autumn, env_vars$sss, env_vars$sss, 
-                          "SSS (PSU)", 
+      create_ts_plot_dual(small_df_yearly, small_df_autumn, "small_zooplankton", "small_zooplankton", 
+                          "Small Zooplankton (ind/sample)", 
                           NULL, TRUE, is_first_col, color)))
     
-    return(wrap_plots(plots, ncol = 1))}
+    return(wrap_plots(plots, ncol = 1))
+  }
   
   # Generate all columns
   plot_list <- list(create_column_plots(env_df_full_seasonal, "Full Stock", TRUE))
