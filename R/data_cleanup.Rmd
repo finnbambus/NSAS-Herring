@@ -189,6 +189,7 @@ plot_LAI_percent <- ggplot(LAI_component, aes(x = as.factor(year),
                               y = LAI_perc., fill = component)) +
   geom_bar(stat = "identity", position = "stack") + # Create stacked bars
   scale_fill_viridis_d(option = "mako", begin = 0.1, end = 0.8) +  # Use mako palette with capped range
+  scale_x_discrete(breaks = function(x) x[seq(1, length(x), by = 2)]) +  # Show every second year
   labs(title = NULL,
        x = "Year",
        y = "LAI Percentage (%)",
