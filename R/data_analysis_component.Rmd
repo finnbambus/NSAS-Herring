@@ -208,8 +208,8 @@ ggsave(filename = file.path("plots/", "SSB_cpt_components.png"),
          bottom = "Year",
          left = "SSB in million t"),
        bg = "white",
-       width = 10,
-       height = 20,
+       width = 7,
+       height = 14,
        dpi = 300)
 ```
 
@@ -435,8 +435,8 @@ ggsave(filename = file.path("plots/", "hysteresis_components.png"),
          bottom = "F",
          left = "SSB in million t"),
        bg = "white",
-       width = 10,
-       height = 20,
+       width = 7,
+       height = 14,
        dpi = 300)
 ```
 
@@ -742,8 +742,8 @@ ggsave(filename = file.path("plots/", "SRR_components.png"),
          bottom = "SSB in million t",
          left = "R in billions"),
        bg = "white",
-       width = 10,
-       height = 20,
+       width = 7,
+       height = 14,
        dpi = 300)
 ```
 

@@ -58,8 +58,8 @@ plot_overview <- plot_herring_summary(
 ggsave(filename = file.path("plots/", "overview.png"),
        plot(plot_overview),
        bg = "white",
-       width = 7,
-       height = 14,
+       width = 5,
+       height = 10,
        dpi = 300)
 ```
 
@@ -93,9 +93,9 @@ results_cpt <- changepoint_analysis(Herring_full,
 ```{r}
 ### Call function plot_SSB_cpt
 plot_SSB_cpt_full <- plot_SSB_cpt(data = Herring_full,
-              changepoints = c(1966, 1983,2000), 
-              ribbon_colors = c("#201124", "#3e478d", "grey", "#318ca5"),
-              vline_colors = c("black", "grey", "black"),
+              changepoints = c(1966,2000), 
+              ribbon_colors = c("#201124", "#3e478d", "#318ca5"),
+              vline_colors = c("black", "black"),
               component = "Full Stock", 
               SSB_column = "SSB", 
               l_bnd_column = "l_bnd", 
@@ -110,8 +110,8 @@ plot_SSB_cpt_full
 ggsave(filename = file.path("plots/", "SSB_cpt_full.png"),
        plot = plot_SSB_cpt_full,
        bg = "white",
-       width = 10,
-       height = 7,
+       width = 7,
+       height = 5,
        dpi = 300)
 ```
 
@@ -150,8 +150,8 @@ plot_hysteresis_full
 ggsave(filename = file.path("plots/", "hysteresis_full.png"),
        plot = plot_hysteresis_full,
        bg = "white",
-       width = 10,
-       height = 7,
+       width = 7,
+       height = 5,
        dpi = 300)
 ```
 
@@ -226,8 +226,8 @@ plot_SRR_full
 ggsave(filename = file.path("plots/", "SRR_full.png"),
        plot = plot_SRR_full,
        bg = "white",
-       width = 10,
-       height = 7,
+       width = 7,
+       height = 5,
        dpi = 300)
 ```
 

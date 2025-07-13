@@ -234,6 +234,9 @@ plot_R_component
 ## Environmental CPR visualization
 
 ```{r}
+threshold_values <- list(
+  "Banks" = 12.1)
+
 ### As factor for intendet component order
 env_df_subset$Region <- factor(env_df_subset$Region, 
                               levels = c("Shetland_Orkney", "Buchan", "Banks", "Downs"))
@@ -244,10 +247,6 @@ plot_env_grid <- plot_env_data_dual(env_df_full, env_df_subset,
                                     threshold_values = threshold_values)
 
 print(plot_env_grid)
-
-
-threshold_values <- list(
-  "Banks" = 12.1)
 ```
 
 # Save data and plots
@@ -278,29 +277,29 @@ save(cpr_component, file = file.path("data/", "cpr_component.Rdata"))
 ggsave(filename = file.path("plots/", "LAI_by_year.png"),
        plot = plot_LAI_byyear,
        bg = "white",
-       width = 10,
-       height = 7,
+       width = 7,
+       height = 5,
        dpi = 300)
 
 ggsave(filename = file.path("plots/", "LAI_percent.png"),
        plot = plot_LAI_percent,
        bg = "white",
-       width = 10,
-       height = 7,
+       width = 7,
+       height = 5,
        dpi = 300)
 
 ggsave(filename = file.path("plots/", "SSB_component.png"),
        plot = plot_SSB_component,
        bg = "white",
-       width = 10,
-       height = 7,
+       width = 7,
+       height = 5,
        dpi = 300)
 
 ggsave(filename = file.path("plots/", "R_component.png"),
        plot = plot_R_component,
        bg = "white",
-       width = 10,
-       height = 7,
+       width = 7,
+       height = 5,
        dpi = 300)
 
 ### Env. plot
