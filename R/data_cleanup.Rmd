@@ -128,12 +128,12 @@ cpr_phyto <- read.csv("data raw/NS CPR/CPR_RegimeShift_Data_Phytoplankton_100620
 #### Full Stock
 cpr_full <- list()
 cpr_full$phyto <- process_food_availability(cpr_phyto)
-cpr_full$small <- process_food_availability(cpr_small)
+cpr_full$small <- process_food_availability(cpr_small, selected_species_ids = c(1, 4, 5, 10742, 1628))
 
 #### Components
 cpr_component <- list()
-cpr_component$phyto <- process_food_availability(cpr_phyto, "data raw/components_shp/components.shp", "component")
-cpr_component$small <- process_food_availability(cpr_small, "data raw/components_shp/components.shp", "component")
+cpr_component$phyto <- process_food_availability(cpr_phyto, shapefile_path = "data raw/components_shp/components.shp", "component")
+cpr_component$small <- process_food_availability(cpr_small, selected_species_ids = c(1, 4, 5, 10742, 1628) , shapefile_path = "data raw/components_shp/components.shp", polygon_id_column = "component")
 
 ### Clear large data
 cpr_small <- NULL
